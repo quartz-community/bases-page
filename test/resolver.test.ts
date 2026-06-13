@@ -557,6 +557,47 @@ describe("resolveBasesEntries", () => {
     expect(result.entries[0]?.slug).toBe("notes/alpha");
   });
 
+  it("resolves scalar custom frontmatter from selfContext via this.*", () => {
+    const files = [
+      makeFile({ slug: "a", frontmatter: { genre: "fiction" } }),
+      makeFile({ slug: "b", frontmatter: { genre: "non-fiction" } }),
+    ];
+    const basesData: BasesData = {
+      filters: "note.genre == this.preferredGenre",
+    };
+    const selfContext = {
+      file: { name: "My Base", path: "bases/my-base.base", folder: "bases", ext: "base" },
+      preferredGenre: "fiction",
+    };
+    const result = resolveBasesEntries(basesData, files, undefined, selfContext);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]?.slug).toBe("a");
+  });
+
+  it("resolves list custom frontmatter from selfContext via this.* in formulas", () => {
+    const files = [
+      makeFile({ slug: "a", frontmatter: { status: "done" } }),
+      makeFile({ slug: "b", frontmatter: { status: "todo" } }),
+      makeFile({ slug: "c", frontmatter: { status: "active" } }),
+    ];
+    const basesData: BasesData = {
+      formulas: {
+        isAllowed: "this.allowedStatuses.contains(note.status)",
+      },
+    };
+    const selfContext = {
+      file: { name: "My Base", path: "bases/my-base.base", folder: "bases", ext: "base" },
+      allowedStatuses: ["done", "active"],
+    };
+    const result = resolveBasesEntries(basesData, files, undefined, selfContext);
+    const a = result.entries.find((e) => e.slug === "a");
+    const b = result.entries.find((e) => e.slug === "b");
+    const c = result.entries.find((e) => e.slug === "c");
+    expect(a?.formulaValues.isAllowed).toBe(true);
+    expect(b?.formulaValues.isAllowed).toBe(false);
+    expect(c?.formulaValues.isAllowed).toBe(true);
+  });
+
   it("hasProperty filter includes files with null/falsy property values", () => {
     const files = [
       makeFile({

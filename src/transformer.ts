@@ -88,6 +88,9 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
         },
         () => {
           return (tree: HTMLRoot, file: VFile) => {
+            // Capture transclusion blocks registered by the earlier transformer pass
+            // so inline codeblock indices can continue from where they left off
+            const existingBlocks = (file.data.basesBlocks as BasesData[] | undefined) ?? [];
             const basesBlocks: BasesData[] = [];
 
             visit(tree, "element", (node: Element, index, parent) => {
@@ -114,7 +117,9 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
               const basesData = parseBasesData(rawText);
               if (!basesData) return;
 
-              const blockIndex = basesBlocks.length;
+              // Offset by existingBlocks so inline codeblock indices don't collide
+              // with transclusion blocks registered by the earlier transformer pass
+              const blockIndex = existingBlocks.length + basesBlocks.length;
               basesBlocks.push(basesData);
 
               // Replace the <pre> node with a placeholder div
@@ -131,7 +136,8 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
             });
 
             if (basesBlocks.length > 0) {
-              file.data.basesBlocks = basesBlocks;
+              // Merge rather than overwrite so transclusion blocks are preserved
+              file.data.basesBlocks = [...existingBlocks, ...basesBlocks];
             }
           };
         },

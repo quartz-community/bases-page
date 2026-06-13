@@ -146,6 +146,9 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
           ?.replace(/\.[^.]+$/, "") ?? "";
       const selfLastSlash = selfPath.lastIndexOf("/");
       const selfContext = {
+        // Spread frontmatter first so custom properties are accessible as this.*
+        ...((fd.frontmatter as Record<string, unknown>) ?? {}),
+        // Computed file object follows so it always wins over any frontmatter key named "file"
         file: {
           name: selfName,
           path: selfPath,
