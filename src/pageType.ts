@@ -74,12 +74,14 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
         title: baseName,
         data: {
           frontmatter: { title: baseName, tags: [] },
-          links: resolveBasesEntries(
-            basesData,
-            allFileData,
-            undefined,
-            basesSelfContext,
-          ).entries.map((e) => e.slug as SimpleSlug),
+          links: opts?.excludeLinksFromGraph
+            ? []
+            : resolveBasesEntries(
+                basesData,
+                allFileData,
+                undefined,
+                basesSelfContext,
+              ).entries.map((e) => e.slug as SimpleSlug),
           basesData,
           basesOptions: opts,
           basesSelfContext,

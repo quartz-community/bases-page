@@ -18384,7 +18384,7 @@ var BasesPage = (opts) => ({
         title: baseName,
         data: {
           frontmatter: { title: baseName, tags: [] },
-          links: resolveBasesEntries(
+          links: opts?.excludeLinksFromGraph ? [] : resolveBasesEntries(
             basesData,
             allFileData,
             void 0,
