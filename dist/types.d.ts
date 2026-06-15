@@ -65,6 +65,12 @@ interface BasesPageOptions {
      * Default: "shortest"
      */
     linkResolution?: "absolute" | "relative" | "shortest";
+    /**
+     * When true, bases pages emit no outgoing links, so queried pages do not
+     * appear connected in the graph. Matches Obsidian's behavior where bases
+     * queries are not treated as backlinks. Default: false.
+     */
+    excludeLinksFromGraph?: boolean;
 }
 /** Sort direction */
 type SortDirection = "ASC" | "DESC";

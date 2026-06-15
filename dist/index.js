@@ -18384,7 +18384,7 @@ var BasesPage = (opts) => ({
         title: baseName,
         data: {
           frontmatter: { title: baseName, tags: [] },
-          links: resolveBasesEntries(
+          links: opts?.excludeLinksFromGraph ? [] : resolveBasesEntries(
             basesData,
             allFileData,
             void 0,
@@ -18436,6 +18436,9 @@ function createBasesCodeblockTransform(opts) {
       const selfName = selfPath.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "";
       const selfLastSlash = selfPath.lastIndexOf("/");
       const selfContext = {
+        // Spread frontmatter first so custom properties are accessible as this.*
+        ...fd.frontmatter ?? {},
+        // Computed file object follows so it always wins over any frontmatter key named "file"
         file: {
           name: selfName,
           path: selfPath,
@@ -18582,6 +18585,7 @@ var BasesTransformer = (_opts) => {
         },
         () => {
           return (tree, file) => {
+            const existingBlocks = file.data.basesBlocks ?? [];
             const basesBlocks = [];
             visit(tree, "element", (node, index2, parent) => {
               if (!parent || index2 === void 0) return;
@@ -18596,7 +18600,7 @@ var BasesTransformer = (_opts) => {
               if (!rawText) return;
               const basesData = parseBasesData(rawText);
               if (!basesData) return;
-              const blockIndex = basesBlocks.length;
+              const blockIndex = existingBlocks.length + basesBlocks.length;
               basesBlocks.push(basesData);
               const placeholder = {
                 type: "element",
@@ -18609,7 +18613,7 @@ var BasesTransformer = (_opts) => {
               replaceParent.children[replaceIndex] = placeholder;
             });
             if (basesBlocks.length > 0) {
-              file.data.basesBlocks = basesBlocks;
+              file.data.basesBlocks = [...existingBlocks, ...basesBlocks];
             }
           };
         }

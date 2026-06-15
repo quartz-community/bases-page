@@ -74,12 +74,14 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
         title: baseName,
         data: {
           frontmatter: { title: baseName, tags: [] },
-          links: resolveBasesEntries(
-            basesData,
-            allFileData,
-            undefined,
-            basesSelfContext,
-          ).entries.map((e) => e.slug as SimpleSlug),
+          links: opts?.excludeLinksFromGraph
+            ? []
+            : resolveBasesEntries(
+                basesData,
+                allFileData,
+                undefined,
+                basesSelfContext,
+              ).entries.map((e) => e.slug as SimpleSlug),
           basesData,
           basesOptions: opts,
           basesSelfContext,
@@ -146,6 +148,9 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
           ?.replace(/\.[^.]+$/, "") ?? "";
       const selfLastSlash = selfPath.lastIndexOf("/");
       const selfContext = {
+        // Spread frontmatter first so custom properties are accessible as this.*
+        ...((fd.frontmatter as Record<string, unknown>) ?? {}),
+        // Computed file object follows so it always wins over any frontmatter key named "file"
         file: {
           name: selfName,
           path: selfPath,
