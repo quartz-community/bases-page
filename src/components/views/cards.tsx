@@ -65,7 +65,11 @@ const CardsView: ViewRenderer = ({
       : [];
   const localeStrings = i18n(locale).components.bases;
   const cardSize = view.cardSize;
-  const aspectRatio = view.imageAspectRatio ?? view.cardAspect;
+  // Obsidian stores imageAspectRatio as height/width; CSS `aspect-ratio` is
+  // width/height. Invert so the card image box matches Obsidian's orientation.
+  const rawAspectRatio = view.imageAspectRatio ?? view.cardAspect;
+  const aspectRatio =
+    typeof rawAspectRatio === "number" && rawAspectRatio > 0 ? 1 / rawAspectRatio : rawAspectRatio;
   const imageFit = view.imageFit === "contain" ? "contain" : "cover";
   const gridStyle =
     typeof cardSize === "number" && cardSize > 0

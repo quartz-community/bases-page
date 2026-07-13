@@ -246,6 +246,10 @@ th.is-sorted-desc .bases-table-header-sort {
     height: 100%;
     display: block;
     object-fit: cover;
+    // Don't inherit a host theme's global `img { margin }` / `border-radius`;
+    // the fixed-ratio, overflow:hidden box would shift + clip the image.
+    margin: 0;
+    border-radius: 0;
   }
 }
 
@@ -329,6 +333,8 @@ th.is-sorted-desc .bases-table-header-sort {
   height: 100%;
   display: block;
   object-fit: cover;
+  margin: 0;
+  border-radius: 0;
 }
 
 .bases-gallery-placeholder {
