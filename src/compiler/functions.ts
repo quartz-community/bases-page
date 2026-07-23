@@ -119,6 +119,8 @@ function listContainsName(list: unknown[], name: string, selfPath?: string | nul
       return match[1] === name || match[1].endsWith(`/${name}`);
     }
     if (item === name) return true;
+    const slugItem = slugifyPath(item);
+    if (slugItem === slugName || slugItem.endsWith(`/${slugName}`)) return true;
     if (item === slugName || item.endsWith(`/${slugName}`)) return true;
     if (
       selfSlug &&
@@ -485,6 +487,35 @@ registerMethodFunction("number", "abs", (target) => {
   return Math.abs(value);
 });
 
+const MONTH_NAMES_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+const MONTH_NAMES_FULL = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 function formatDateToken(date: Date, token: string): string {
   const pad = (n: number, len = 2) => String(n).padStart(len, "0");
   const y = date.getFullYear();
@@ -501,6 +532,10 @@ function formatDateToken(date: Date, token: string): string {
       return String(y);
     case "YY":
       return String(y).slice(-2);
+    case "MMMM":
+      return MONTH_NAMES_FULL[date.getMonth()]!;
+    case "MMM":
+      return MONTH_NAMES_SHORT[date.getMonth()]!;
     case "MM":
       return pad(M);
     case "M":
@@ -535,7 +570,7 @@ function formatDateToken(date: Date, token: string): string {
 }
 
 function formatDate(date: Date, format: string): string {
-  const tokenPattern = /YYYY|YY|MM|M|DD|D|HH|H|hh|h|mm|m|ss|s|A|a/g;
+  const tokenPattern = /YYYY|YY|MMMM|MMM|MM|M|DD|D|HH|H|hh|h|mm|m|ss|s|A|a/g;
   let result = "";
   let lastIndex = 0;
   let match = tokenPattern.exec(format);
@@ -702,6 +737,11 @@ registerMethodFunction("string", "asFile", (target, _args, context) => {
 registerMethodFunction("list", "contains", (target, [needle]) => {
   if (!Array.isArray(target)) return false;
   if (target.includes(needle)) return true;
+  if (typeof needle === "string") {
+    const slugNeedle = slugifyPath(needle);
+    if (target.some((item) => typeof item === "string" && slugifyPath(item) === slugNeedle))
+      return true;
+  }
   const name = resolveSelfName(needle);
   return name ? listContainsName(target, name, resolveSelfPath(needle)) : false;
 });
