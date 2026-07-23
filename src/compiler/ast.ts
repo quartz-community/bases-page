@@ -5,19 +5,7 @@ export type LiteralValue = string | number | boolean | null;
 export type UnaryOperator = "!" | "-";
 
 export type BinaryOperator =
-  | "+"
-  | "-"
-  | "*"
-  | "/"
-  | "%"
-  | "=="
-  | "!="
-  | ">"
-  | "<"
-  | ">="
-  | "<="
-  | "&&"
-  | "||";
+  "+" | "-" | "*" | "/" | "%" | "==" | "!=" | ">" | "<" | ">=" | "<=" | "&&" | "||";
 
 type BaseNode = {
   type: string;

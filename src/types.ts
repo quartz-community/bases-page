@@ -104,10 +104,7 @@ export interface SortEntry {
 
 /** Filter tree node — recursive and/or/not structure matching Obsidian spec */
 export type FilterNode =
-  | string
-  | { and: FilterNode[] }
-  | { or: FilterNode[] }
-  | { not: FilterNode[] };
+  string | { and: FilterNode[] } | { or: FilterNode[] } | { not: FilterNode[] };
 
 /** Group-by configuration */
 export interface GroupBy {
