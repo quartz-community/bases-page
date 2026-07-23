@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
+      - run: npm ci
       - run: npm run typecheck --if-present
       - run: npm run lint --if-present
       - run: npm run format --if-present
@@ -51,22 +51,3 @@ jobs:
           }
           console.log('dist/ externals verified: all imports are bundled or allowlisted.');
           "
-
-  publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: "https://registry.npmjs.org"
-      - run: npm install
-      - run: npm run build
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
