@@ -37,3 +37,4 @@ coverage/
 # Cache
 .cache/
 .eslintcache
+dist/
