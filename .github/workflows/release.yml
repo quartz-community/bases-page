@@ -21,7 +21,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm install
       - name: Create Release PR or Publish
-        uses: changesets/action@v2
+        uses: changesets/action@v1
         with:
           publish: npm run release
           title: "chore: version package"
