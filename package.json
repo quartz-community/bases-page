@@ -1,6 +1,6 @@
 {
   "name": "@quartz-community/bases-page",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Obsidian Bases page type plugin for Quartz v5. Renders database-like filtered views of notes from .base files.",
   "type": "module",
   "license": "MIT",
