@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2
+
+### Patch Changes
+
+- 0728d19: Fix transclusion of base views with spaces in the name. The OFM plugin slugifies the fragment (e.g., `French Philosophers` → `french-philosophers`) but the view lookup expected the original name. View matching now normalizes both sides by lowercasing and replacing spaces with hyphens.
+
 ## 0.2.1
 
 ### Patch Changes
