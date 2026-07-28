@@ -118,7 +118,6 @@
     "defaultOrder": 50,
     "defaultEnabled": true,
     "defaultOptions": {
-      "defaultViewType": "table",
       "linkResolution": "shortest"
     },
     "optionSchema": {
