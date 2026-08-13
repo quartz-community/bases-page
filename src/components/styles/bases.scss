@@ -237,6 +237,15 @@ th.is-sorted-desc .bases-table-header-sort {
   }
 }
 
+// The whole card is an <a class="internal">; undo the host theme's inline-link
+// treatment (highlight tile, padding, link line-height) — the card is a block,
+// not a wikilink in prose.
+a.internal.bases-card {
+  background-color: transparent;
+  padding: 0;
+  line-height: inherit;
+}
+
 .bases-card-image {
   overflow: hidden;
   background: var(--lightgray);
@@ -274,15 +283,10 @@ th.is-sorted-desc .bases-table-header-sort {
   gap: 4px;
 }
 
+// Value-only meta rows (the property name lives in the row's title attribute).
 .bases-card-row {
-  display: flex;
-  justify-content: space-between;
   font-size: 0.8rem;
   color: var(--darkgray);
-}
-
-.bases-card-label {
-  color: var(--gray);
 }
 
 .bases-map-placeholder {

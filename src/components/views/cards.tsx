@@ -80,12 +80,14 @@ const CardsView: ViewRenderer = ({
 
   return (
     <div class="bases-cards-wrapper">
-      <div class="bases-view-meta">
-        {formatMessage(localeStrings.showingCount, {
-          count: entries.length,
-          total,
-        })}
-      </div>
+      {entries.length < total && (
+        <div class="bases-view-meta">
+          {formatMessage(localeStrings.showingCount, {
+            count: entries.length,
+            total,
+          })}
+        </div>
+      )}
       <div class="bases-cards" style={gridStyle}>
         {entries.map((entry) => {
           const ctx = { slug, allSlugs, linkResolution };
@@ -124,8 +126,7 @@ const CardsView: ViewRenderer = ({
                     const value = resolveEntryPropertyValue(column, entry);
                     if (isEmptyValue(value)) return null;
                     return (
-                      <div class="bases-card-row">
-                        <span class="bases-card-label">{getColumnLabel(column, basesData)}</span>
+                      <div class="bases-card-row" title={getColumnLabel(column, basesData)}>
                         <span class="bases-card-value">{renderCellValue(value, ctx)}</span>
                       </div>
                     );
