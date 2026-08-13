@@ -80,6 +80,7 @@ function compareSort(a, b) {
   if (a === void 0 || a === null) return 1;
   if (b === void 0 || b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
   const dateA = typeof a === "string" ? Date.parse(a) : NaN;
   const dateB = typeof b === "string" ? Date.parse(b) : NaN;
   if (!Number.isNaN(dateA) && !Number.isNaN(dateB)) return dateA - dateB;
@@ -422,7 +423,7 @@ var BoardView = ({
     groups.set(localeStrings.allEntries, { label: localeStrings.allEntries, entries });
   }
   return /* @__PURE__ */ u("div", { class: "bases-board-wrapper", children: [
-    /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage(localeStrings.showingCount, {
+    entries.length < total && /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage(localeStrings.showingCount, {
       count: entries.length,
       total
     }) }),
@@ -579,7 +580,7 @@ var GalleryView = ({
   const imageOpts = { slug, allSlugs, linkResolution };
   const transformOpts = { strategy: linkResolution, allSlugs };
   return /* @__PURE__ */ u("div", { class: "bases-gallery-wrapper", children: [
-    /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage3(localeStrings.showingCount, {
+    entries.length < total && /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage3(localeStrings.showingCount, {
       count: entries.length,
       total
     }) }),
@@ -637,7 +638,7 @@ var ListView = ({
   const localeStrings = i18n(locale).components.bases;
   const transformOpts = { strategy: linkResolution, allSlugs };
   return /* @__PURE__ */ u("div", { class: "bases-list-wrapper", children: [
-    /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage4(localeStrings.showingCount, {
+    entries.length < total && /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage4(localeStrings.showingCount, {
       count: entries.length,
       total
     }) }),
@@ -775,7 +776,7 @@ var TableView = ({
   const groupPropertyLabel = groupProperty ? getColumnLabel(groupProperty, basesData) : "";
   const groups = groupEntries(entries, groupProperty, localeStrings.uncategorized);
   return /* @__PURE__ */ u("div", { class: "bases-table-wrapper", children: [
-    /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage5(localeStrings.showingCount, {
+    entries.length < total && /* @__PURE__ */ u("div", { class: "bases-view-meta", children: formatMessage5(localeStrings.showingCount, {
       count: entries.length,
       total
     }) }),
@@ -923,5 +924,5 @@ var BasesBody_default = ((opts) => {
 });
 
 export { BasesBody_default, ViewSelector, i18n, registerBuiltinViews, resolveBasesEntries };
-//# sourceMappingURL=chunk-AI4DM77R.js.map
-//# sourceMappingURL=chunk-AI4DM77R.js.map
+//# sourceMappingURL=chunk-XE4ESUGX.js.map
+//# sourceMappingURL=chunk-XE4ESUGX.js.map

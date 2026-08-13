@@ -53,12 +53,14 @@ const BoardView: ViewRenderer = ({
 
   return (
     <div class="bases-board-wrapper">
-      <div class="bases-view-meta">
-        {formatMessage(localeStrings.showingCount, {
-          count: entries.length,
-          total,
-        })}
-      </div>
+      {entries.length < total && (
+        <div class="bases-view-meta">
+          {formatMessage(localeStrings.showingCount, {
+            count: entries.length,
+            total,
+          })}
+        </div>
+      )}
       <div class="bases-board">
         {Array.from(groups.values()).map((group) => (
           <div class="bases-board-column">

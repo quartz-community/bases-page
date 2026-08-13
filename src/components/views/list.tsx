@@ -33,12 +33,14 @@ const ListView: ViewRenderer = ({
 
   return (
     <div class="bases-list-wrapper">
-      <div class="bases-view-meta">
-        {formatMessage(localeStrings.showingCount, {
-          count: entries.length,
-          total,
-        })}
-      </div>
+      {entries.length < total && (
+        <div class="bases-view-meta">
+          {formatMessage(localeStrings.showingCount, {
+            count: entries.length,
+            total,
+          })}
+        </div>
+      )}
       <div class="bases-list-group">
         <div class="bases-list-group-list">
           {entries.map((entry) => {

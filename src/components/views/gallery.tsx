@@ -32,12 +32,14 @@ const GalleryView: ViewRenderer = ({
 
   return (
     <div class="bases-gallery-wrapper">
-      <div class="bases-view-meta">
-        {formatMessage(localeStrings.showingCount, {
-          count: entries.length,
-          total,
-        })}
-      </div>
+      {entries.length < total && (
+        <div class="bases-view-meta">
+          {formatMessage(localeStrings.showingCount, {
+            count: entries.length,
+            total,
+          })}
+        </div>
+      )}
       <div class="bases-gallery" style={gridStyle}>
         {entries.map((entry) => {
           const imageValue = imageProperty

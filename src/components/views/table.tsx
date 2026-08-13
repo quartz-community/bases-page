@@ -100,12 +100,14 @@ const TableView: ViewRenderer = ({
 
   return (
     <div class="bases-table-wrapper">
-      <div class="bases-view-meta">
-        {formatMessage(localeStrings.showingCount, {
-          count: entries.length,
-          total,
-        })}
-      </div>
+      {entries.length < total && (
+        <div class="bases-view-meta">
+          {formatMessage(localeStrings.showingCount, {
+            count: entries.length,
+            total,
+          })}
+        </div>
+      )}
       <table class="bases-table" data-view-type="table">
         <thead>
           <tr>
