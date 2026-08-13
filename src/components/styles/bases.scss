@@ -135,6 +135,15 @@ th.is-sorted-desc .bases-table-header-sort {
   color: var(--darkgray);
 }
 
+.bases-table ul.tags {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
 .bases-table-group-header td {
   background: var(--lightgray);
   font-weight: 600;

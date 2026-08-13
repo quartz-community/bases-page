@@ -1,6 +1,6 @@
 import { createRequire } from 'module';
-import { BasesBody_default, resolveBasesEntries, registerBuiltinViews, i18n, ViewSelector } from './chunk-5VUT4RYA.js';
-export { BasesBody_default as BasesBody } from './chunk-5VUT4RYA.js';
+import { BasesBody_default, resolveBasesEntries, registerBuiltinViews, i18n, ViewSelector } from './chunk-DIS4G6DL.js';
+export { BasesBody_default as BasesBody } from './chunk-DIS4G6DL.js';
 import { registerCustomViews, viewRegistry } from './chunk-2AUMER56.js';
 export { registerCustomViews, viewRegistry } from './chunk-2AUMER56.js';
 import { slugifyFilePath, k, S, l } from './chunk-BTL432MM.js';
