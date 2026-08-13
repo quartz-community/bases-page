@@ -10,7 +10,11 @@ import {
   resolveEntryPropertyValue,
 } from "../shared/cell";
 import { computeSummary } from "../shared/summary";
-import { transformLink } from "@quartz-community/utils";
+import { resolveRelative, transformLink } from "@quartz-community/utils";
+
+// Tag properties render as linked chips (like Obsidian's bases and the host
+// theme's tag lists) instead of comma-joined plain text.
+const TAG_COLUMNS = new Set(["tags", "note.tags", "file.tags"]);
 
 function formatMessage(template: string, values: Record<string, string | number>): string {
   return Object.entries(values).reduce(
@@ -70,6 +74,19 @@ function renderRow(
               >
                 {display || entry.title}
               </a>
+            ) : TAG_COLUMNS.has(column) && Array.isArray(value) && value.length > 0 ? (
+              <ul class="tags">
+                {value.map((tag) => (
+                  <li>
+                    <a
+                      class="internal tag-link"
+                      href={resolveRelative(slug as FullSlug, `tags/${String(tag)}` as FullSlug)}
+                    >
+                      {String(tag)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             ) : (
               renderCellValue(value, ctx)
             )}

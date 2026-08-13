@@ -1,6 +1,6 @@
 import { createRequire } from 'module';
 import { viewRegistry, registerCustomViews } from './chunk-2AUMER56.js';
-import { u, evaluate, evaluateFilter, resolvePropertyValue, S, transformLink, slugifyPath } from './chunk-X2AZ5GOJ.js';
+import { u, evaluate, evaluateFilter, resolvePropertyValue, S, transformLink, resolveRelative, slugifyPath } from './chunk-BTL432MM.js';
 
 createRequire(import.meta.url);
 
@@ -716,6 +716,7 @@ function computeSummary(values, summary) {
 }
 
 // src/components/views/table.tsx
+var TAG_COLUMNS = /* @__PURE__ */ new Set(["tags", "note.tags", "file.tags"]);
 function formatMessage5(template, values) {
   return Object.entries(values).reduce(
     (text, [key, value]) => text.replace(`{${key}}`, String(value)),
@@ -755,7 +756,14 @@ function renderRow(entry, columns, view, slug, allSlugs, linkResolution) {
         "data-slug": entry.slug,
         children: display || entry.title
       }
-    ) : renderCellValue(value, ctx) });
+    ) : TAG_COLUMNS.has(column) && Array.isArray(value) && value.length > 0 ? /* @__PURE__ */ u("ul", { class: "tags", children: value.map((tag) => /* @__PURE__ */ u("li", { children: /* @__PURE__ */ u(
+      "a",
+      {
+        class: "internal tag-link",
+        href: resolveRelative(slug, `tags/${String(tag)}`),
+        children: String(tag)
+      }
+    ) })) }) : renderCellValue(value, ctx) });
   }) });
 }
 var TableView = ({
@@ -924,5 +932,5 @@ var BasesBody_default = ((opts) => {
 });
 
 export { BasesBody_default, ViewSelector, i18n, registerBuiltinViews, resolveBasesEntries };
-//# sourceMappingURL=chunk-XE4ESUGX.js.map
-//# sourceMappingURL=chunk-XE4ESUGX.js.map
+//# sourceMappingURL=chunk-5VUT4RYA.js.map
+//# sourceMappingURL=chunk-5VUT4RYA.js.map
