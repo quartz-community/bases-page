@@ -270,6 +270,9 @@ describe("list functions and methods", () => {
       self: {
         file: {
           name: "Paul Chambers",
+          basename: "Paul Chambers",
+          tags: [],
+          links: [],
           path: "artists/Paul Chambers.md",
           folder: "artists",
           ext: "md",
@@ -284,6 +287,9 @@ describe("list functions and methods", () => {
     const self = {
       file: {
         name: "Paul Chambers",
+        basename: "Paul Chambers",
+        tags: [],
+        links: [],
         path: "artists/Paul Chambers.md",
         folder: "artists",
         ext: "md",
@@ -305,6 +311,9 @@ describe("list functions and methods", () => {
       self: {
         file: {
           name: "Paul Chambers",
+          basename: "Paul Chambers",
+          tags: [],
+          links: [],
           path: "artists/Paul Chambers.md",
           folder: "artists",
           ext: "md",
@@ -319,6 +328,9 @@ describe("list functions and methods", () => {
     const self = {
       file: {
         name: "Paul Chambers",
+        basename: "Paul Chambers",
+        tags: [],
+        links: [],
         path: "artists/Paul Chambers.md",
         folder: "artists",
         ext: "md",

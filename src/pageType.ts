@@ -17,7 +17,7 @@ import { join } from "path";
 import { slugifyFilePath } from "@quartz-community/utils";
 import type { SimpleSlug } from "@quartz-community/utils";
 import { parseBasesData } from "./parser";
-import { resolveBasesEntries } from "./resolver";
+import { buildSelfContext, resolveBasesEntries } from "./resolver";
 import BasesBody from "./components/BasesBody";
 import type { BasesPageOptions, BasesData } from "./types";
 import type { EvalContext } from "./compiler";
@@ -56,18 +56,7 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
       const fileWithoutExt = filePath.replace(/\.base$/, "");
       const baseName = fileWithoutExt.split("/").pop() ?? "Base";
 
-      const lastSlash = filePath.lastIndexOf("/");
-      const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
-      const dotIndex = filePath.lastIndexOf(".");
-      const ext = dotIndex >= 0 ? filePath.slice(dotIndex + 1) : "";
-      const basesSelfContext = {
-        file: {
-          name: baseName,
-          path: filePath,
-          folder,
-          ext,
-        },
-      };
+      const basesSelfContext = buildSelfContext({ relativePath: filePath }, slug);
 
       virtualPages.push({
         slug,
@@ -137,22 +126,7 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
 
       const viewName = node.properties?.["dataQzBasesView"] as string | undefined;
 
-      const fd = componentData.fileData as Record<string, unknown>;
-      const selfPath = (fd.relativePath ?? fd.filePath ?? slug) as string;
-      const selfName =
-        selfPath
-          .split("/")
-          .pop()
-          ?.replace(/\.[^.]+$/, "") ?? "";
-      const selfLastSlash = selfPath.lastIndexOf("/");
-      const selfContext = {
-        file: {
-          name: selfName,
-          path: selfPath,
-          folder: selfLastSlash >= 0 ? selfPath.slice(0, selfLastSlash) : "",
-          ext: selfPath.slice(selfPath.lastIndexOf(".") + 1),
-        },
-      };
+      const selfContext = buildSelfContext(componentData.fileData, slug);
 
       const baseSlugs = new Set(allSlugs.filter((s) => s.endsWith(".base")));
       const baseAliases = new Set([...baseSlugs].map((s) => s.replace(/\.base$/, "")));

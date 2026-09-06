@@ -87,6 +87,22 @@ function isFileValue(value: unknown): value is EvalContext["file"] {
   );
 }
 
+// asLink() uses full paths, frontmatter may use short wikilinks, and Quartz's
+// outgoing links use slugs. Resolve known files before comparing, preserving
+// the distinction between equally named files in different folders.
+function linksMatch(target: unknown, needle: unknown, context: EvalContext): boolean {
+  if (typeof target !== "string" || typeof needle !== "string") return false;
+  const needleLink = needle.match(/^\[\[([^\]|]+)(?:\|[^\]]+)?\]\]$/);
+  if (!needleLink?.[1]) return false;
+  const targetLink = target.match(/^\[\[([^\]|]+)(?:\|[^\]]+)?\]\]$/);
+  const resolvePath = (path: string): string => {
+    const file =
+      context._fileLookup?.get(path) ?? context._fileLookup?.get(path.replace(/\.md$/, ""));
+    return slugifyFilePath((file?.path ?? path) as FilePath);
+  };
+  return resolvePath(targetLink?.[1] ?? target) === resolvePath(needleLink[1]);
+}
+
 function resolveSelfName(value: unknown): string | null {
   if (!isRecord(value)) return null;
   if (isRecord(value.file) && typeof (value.file as Record<string, unknown>).name === "string") {
@@ -405,8 +421,9 @@ registerMethodFunction("file", "hasProperty", (_target, [prop], context) => {
   return true;
 });
 
-registerMethodFunction("string", "contains", (target, [needle]) => {
+registerMethodFunction("string", "contains", (target, [needle], context) => {
   const value = toStringValue(target);
+  if (value.startsWith("[[") && linksMatch(value, needle, context)) return true;
   return value.includes(toStringValue(needle));
 });
 
@@ -734,9 +751,10 @@ registerMethodFunction("string", "asFile", (target, _args, context) => {
   return buildFileValue(path);
 });
 
-registerMethodFunction("list", "contains", (target, [needle]) => {
+registerMethodFunction("list", "contains", (target, [needle], context) => {
   if (!Array.isArray(target)) return false;
   if (target.includes(needle)) return true;
+  if (target.some((item) => linksMatch(item, needle, context))) return true;
   if (typeof needle === "string") {
     const slugNeedle = slugifyPath(needle);
     if (target.some((item) => typeof item === "string" && slugifyPath(item) === slugNeedle))

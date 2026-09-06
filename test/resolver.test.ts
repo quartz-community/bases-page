@@ -547,6 +547,9 @@ describe("resolveBasesEntries", () => {
     const selfContext = {
       file: {
         name: "My Base",
+        basename: "My Base",
+        tags: [],
+        links: [],
         path: "bases/My Base.base",
         folder: "bases",
         ext: "base",

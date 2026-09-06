@@ -21,12 +21,7 @@ export type EvalContext = {
   };
   formula: Record<string, unknown>;
   self?: {
-    file: {
-      name: string;
-      path: string;
-      folder: string;
-      ext: string;
-    };
+    file: EvalContext["file"];
   };
   _lambdaValue?: unknown;
   _fileLookup?: Map<string, EvalContext["file"]>;

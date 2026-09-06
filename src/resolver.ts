@@ -73,6 +73,15 @@ function buildFileProperties(
   };
 }
 
+/** Build the same file value for the current page as for candidate notes. */
+export function buildSelfContext(
+  fileData: QuartzPluginData,
+  slug: string,
+): NonNullable<EvalContext["self"]> {
+  const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
+  return { file: { ...buildFileProperties(fileData, slug, frontmatter), properties: frontmatter } };
+}
+
 function compareSort(a: unknown, b: unknown): number {
   if (a === b) return 0;
   if (a === undefined || a === null) return 1;
