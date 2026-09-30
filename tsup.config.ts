@@ -113,7 +113,6 @@ export default defineConfig({
   esbuildOptions(options) {
     options.jsx = "automatic";
     options.jsxImportSource = "preact";
-    // tsup matches noExternal before external, so its catch-all above would bundle these too
     options.external = SINGLETON_EXTERNALS;
   },
   esbuildPlugins: [inlineScriptPlugin],
