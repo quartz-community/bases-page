@@ -69,17 +69,26 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
         },
       };
 
+      // Union of entries across every view, each respecting its own
+      // filters — resolveBasesEntries(..., view: undefined, ...) only
+      // applies the (usually absent) top-level basesData.filters and skips
+      // per-view filters entirely, which made every .base page's "links"
+      // effectively "every file in the vault" whenever filters live on the
+      // views (the common case), poisoning backlinks for unrelated pages.
+      const linkedSlugs = new Set<SimpleSlug>();
+      for (const view of basesData.views ?? []) {
+        const { entries } = resolveBasesEntries(basesData, allFileData, view, basesSelfContext)
+        for (const entry of entries) {
+          linkedSlugs.add(entry.slug as SimpleSlug)
+        }
+      }
+
       virtualPages.push({
         slug,
         title: baseName,
         data: {
           frontmatter: { title: baseName, tags: [] },
-          links: resolveBasesEntries(
-            basesData,
-            allFileData,
-            undefined,
-            basesSelfContext,
-          ).entries.map((e) => e.slug as SimpleSlug),
+          links: [...linkedSlugs],
           basesData,
           basesOptions: opts,
           basesSelfContext,

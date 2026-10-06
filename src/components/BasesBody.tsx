@@ -44,11 +44,45 @@ export default ((opts?: BasesPageOptions) => {
       return <div class="bases-page bases-empty">{localeStrings.noViews}</div>;
     }
 
-    const preferredType = basesOptions?.defaultViewType ?? "table";
-    const initialIndex = Math.max(
-      0,
-      views.findIndex((view) => view.type === preferredType),
+    // Resolve entries once up front (rather than per-view during render) so
+    // the default-view choice below can inspect them too.
+    const viewEntries = views.map((view) =>
+      resolveBasesEntries(basesData, props.allFiles, view, basesSelfContext),
     );
+
+    const hasLeafletPins = (entries: (typeof viewEntries)[number]["entries"]) =>
+      entries.some((entry) => {
+        const markers = (entry.properties as Record<string, unknown> | undefined)?.marker;
+        return (
+          Array.isArray(markers) &&
+          markers.some(
+            (marker) =>
+              typeof marker === "object" &&
+              marker !== null &&
+              typeof (marker as Record<string, unknown>).coordinates === "string",
+          )
+        );
+      });
+
+    // A leaflet-map view with at least one pin is a more useful default
+    // than an empty/generic table, so prefer it — unless the site owner
+    // explicitly configured a defaultViewType, which always wins.
+    const explicitPreferredType = basesOptions?.defaultViewType;
+    const leafletIndexWithPins = explicitPreferredType
+      ? -1
+      : views.findIndex(
+          (view, index) =>
+            view.type === "leaflet-map" && hasLeafletPins(viewEntries[index]?.entries ?? []),
+        );
+
+    const preferredType = explicitPreferredType ?? "table";
+    const initialIndex =
+      leafletIndexWithPins >= 0
+        ? leafletIndexWithPins
+        : Math.max(
+            0,
+            views.findIndex((view) => view.type === preferredType),
+          );
     if (!builtinViewsRegistered) {
       registerBuiltinViews();
       builtinViewsRegistered = true;
@@ -74,12 +108,7 @@ export default ((opts?: BasesPageOptions) => {
         <ViewSelector views={views} activeIndex={initialIndex} locale={locale} />
         <div class="bases-view-container">
           {views.map((view, index) => {
-            const { entries, total } = resolveBasesEntries(
-              basesData,
-              props.allFiles,
-              view,
-              basesSelfContext,
-            );
+            const { entries, total } = viewEntries[index] ?? { entries: [], total: 0 };
             const registration = viewRegistry.get(view.type);
             const Renderer = registration?.render;
             return (
