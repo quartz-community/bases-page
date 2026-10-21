@@ -173,6 +173,60 @@ describe("string methods", () => {
     expect(result.basename).toBe("Apple");
     expect(result.path).toBe("Compendium/Species/Dryad/Apple.md");
   });
+
+  it.each([
+    "[[Apple]]",
+    "[[Apple|Red Apple]]",
+    "[[Apple#Lineage]]",
+    "[[Apple#Lineage|Red Apple]]",
+    " [[Apple]] ",
+  ])("resolves wikilink-wrapped value %s via _fileLookup", (link) => {
+    const lookup = new Map<string, EvalContext["file"]>();
+    lookup.set("Compendium/Species/Dryad/Apple.md", {
+      name: "Apple.md",
+      basename: "Apple",
+      path: "Compendium/Species/Dryad/Apple.md",
+      folder: "Compendium/Species/Dryad",
+      ext: "md",
+      tags: ["lineage"],
+      links: [],
+    });
+    const ctx = { ...context, _fileLookup: lookup };
+    const result = evaluate(`"${link}".asFile()`, ctx) as Record<string, unknown>;
+    expect(result.path).toBe("Compendium/Species/Dryad/Apple.md");
+  });
+
+  it("matches wikilink frontmatter against this.file via asFile()", () => {
+    const lookup = new Map<string, EvalContext["file"]>();
+    lookup.set("places/tavern.md", {
+      name: "tavern.md",
+      basename: "tavern",
+      path: "places/tavern.md",
+      folder: "places",
+      ext: "md",
+      tags: [],
+      links: [],
+    });
+    const ctx = {
+      ...context,
+      _fileLookup: lookup,
+      self: { file: { name: "tavern", path: "places/tavern.md", folder: "places", ext: "md" } },
+      note: { ...context.note, location: "[[tavern]]" },
+    };
+    expect(evaluate("location.asFile().path == this.file.path", ctx)).toBe(true);
+    expect(evaluate("location.asFile().asLink()", ctx)).toBe("[[places/tavern]]");
+  });
+
+  it.each([
+    ["[[Apple]] and [[Pear]]", "[[Apple]] and [[Pear]]"],
+    ["[[missing#h]]", "missing"],
+    ["[[missing|x]]", "missing"],
+    ["[[ ]]", "[[ ]]"],
+  ])("falls back to a skeleton for unresolvable %s with path %s", (value, path) => {
+    const ctx = { ...context, _fileLookup: new Map<string, EvalContext["file"]>() };
+    const result = evaluate(`"${value}".asFile()`, ctx) as Record<string, unknown>;
+    expect(result.path).toBe(path);
+  });
 });
 
 describe("number methods", () => {
@@ -278,6 +332,31 @@ describe("list functions and methods", () => {
       note: { ...context.note, list: ["[[Paul Chambers]]"] },
     };
     expect(evaluate("list.contains(this)", ctx)).toBe(true);
+  });
+
+  it("matches self-context heading wikilinks in list.contains", () => {
+    const ctx = {
+      ...context,
+      self: {
+        file: {
+          name: "Paul Chambers",
+          path: "artists/Paul Chambers.md",
+          folder: "artists",
+          ext: "md",
+        },
+      },
+      note: {
+        ...context.note,
+        list: ["[[Paul Chambers#Bio|Paul]]"],
+        padded: ["[[ Paul Chambers.md ]]"],
+        lowercase: ["[[paul chambers]]"],
+        other: ["[[Paul Simon]]", "[[Chambers]]"],
+      },
+    };
+    expect(evaluate("list.contains(this)", ctx)).toBe(true);
+    expect(evaluate("padded.contains(this)", ctx)).toBe(true);
+    expect(evaluate("lowercase.contains(this)", ctx)).toBe(true);
+    expect(evaluate("other.contains(this)", ctx)).toBe(false);
   });
 
   it("matches self-context bare names and path-qualified wikilinks", () => {
@@ -530,6 +609,15 @@ describe("link helpers", () => {
   it("strips .md extension from file object path in link()", () => {
     const fileWithMd = evaluate('link(file("notes/doc.md"))', context);
     expect(fileWithMd).toBe("[[notes/doc]]");
+  });
+
+  // Obsidian renders link("[[page#h|alias]]") as a link to page#h, without the alias.
+  it("keeps an existing wikilink's target and heading in link()", () => {
+    expect(evaluate('link("[[page]]")', context)).toBe("[[page]]");
+    expect(evaluate('link("[[page|alias]]")', context)).toBe("[[page]]");
+    expect(evaluate('link("[[page#Heading|alias]]")', context)).toBe("[[page#Heading]]");
+    expect(evaluate('link("[[page]]", "shown")', context)).toBe("[[page|shown]]");
+    expect(evaluate('"[[missing|x]]".asFile().asLink()', context)).toBe("[[missing]]");
   });
 
   it("strips .md extension from file object path in image()", () => {

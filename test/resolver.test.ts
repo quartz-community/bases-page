@@ -201,6 +201,34 @@ describe("resolveBasesEntries", () => {
     expect(visible?.formulaValues?.linkedTitle).not.toBe("Hidden Secret");
   });
 
+  it.each(["[[secret/hidden]]", "[[hidden]]", "[[hidden#h|x]]"])(
+    "unlisted pages cannot be dereferenced via a wikilink %s either",
+    (linked) => {
+      const basesData: BasesData = {
+        formulas: {
+          linkedPath: "note.linked.asFile().path",
+          linkedProps: "note.linked.asFile().properties",
+        },
+      };
+      const files = [
+        makeFile({
+          slug: "visible/page",
+          filePath: "visible/page.md",
+          frontmatter: { title: "Visible", linked },
+        }),
+        makeFile({
+          slug: "secret/hidden",
+          filePath: "secret/hidden.md",
+          frontmatter: { title: "Hidden Secret" },
+          unlisted: true,
+        }),
+      ];
+      const [visible] = resolveBasesEntries(basesData, files).entries;
+      expect(visible?.formulaValues.linkedPath).not.toBe("secret/hidden.md");
+      expect(visible?.formulaValues.linkedProps).toBeUndefined();
+    },
+  );
+
   it("evaluates formulas on entries", () => {
     const basesData: BasesData = {
       formulas: {
@@ -555,6 +583,26 @@ describe("resolveBasesEntries", () => {
     const result = resolveBasesEntries(basesData, files, undefined, selfContext);
     expect(result.entries).toHaveLength(1);
     expect(result.entries[0]?.slug).toBe("notes/alpha");
+  });
+
+  it("matches wikilink-valued frontmatter against this via asFile()", () => {
+    const files = [
+      makeFile({ slug: "places/tavern", filePath: "places/tavern.md" }),
+      makeFile({ slug: "people/alice", frontmatter: { location: "[[tavern]]" } }),
+      makeFile({ slug: "people/bob", frontmatter: { location: "[[tavern|The Tavern]]" } }),
+      makeFile({ slug: "people/carol", frontmatter: { location: "[[places/tavern#Bar]]" } }),
+      makeFile({ slug: "people/dave", frontmatter: { location: "[[elsewhere]]" } }),
+    ];
+    const basesData: BasesData = { filters: "location.asFile().path == this.file.path" };
+    const selfContext = {
+      file: { name: "tavern", path: "places/tavern.md", folder: "places", ext: "md" },
+    };
+    const result = resolveBasesEntries(basesData, files, undefined, selfContext);
+    expect(result.entries.map((entry) => entry.slug)).toEqual([
+      "people/alice",
+      "people/bob",
+      "people/carol",
+    ]);
   });
 
   it("hasProperty filter includes files with null/falsy property values", () => {

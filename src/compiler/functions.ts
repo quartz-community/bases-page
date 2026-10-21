@@ -112,12 +112,10 @@ function resolveSelfPath(value: unknown): string | null {
 function listContainsName(list: unknown[], name: string, selfPath?: string | null): boolean {
   const slugName = slugifyPath(name);
   const selfSlug = selfPath ? slugifyFilePath(selfPath as FilePath) : null;
-  return list.some((item) => {
-    if (typeof item !== "string") return false;
-    const match = item.match(/^\[\[([^\]|]+)(?:\|[^\]]+)?\]\]$/);
-    if (match?.[1]) {
-      return match[1] === name || match[1].endsWith(`/${name}`);
-    }
+  return list.some((value) => {
+    if (typeof value !== "string") return false;
+    // A wikilink's target is matched like a bare name, so case and slug differences resolve too.
+    const item = parseWikilink(value)?.target.replace(/\.md$/, "") ?? value;
     if (item === name) return true;
     const slugItem = slugifyPath(item);
     if (slugItem === slugName || slugItem.endsWith(`/${slugName}`)) return true;
@@ -242,6 +240,24 @@ function parseDate(value: unknown): Date | undefined {
   return undefined;
 }
 
+// Obsidian keeps wikilink syntax in link-valued frontmatter ("[[Apple]]", "[[Apple|alias]]",
+// "[[Apple#heading]]"). Splits a value that is exactly one wikilink into target and #heading.
+function parseWikilink(value: string): { target: string; subpath: string } | null {
+  const match = /^\[\[([^|#\]]+)(#[^|\]]*)?(?:\|[^\]]*)?\]\]$/.exec(value.trim());
+  const target = match?.[1]?.trim();
+  if (!match || !target) return null;
+  return { target, subpath: match[2] ?? "" };
+}
+
+// The link target for a file value, a path, or an existing wikilink (keeping its #heading;
+// like Obsidian, a wikilink's alias is dropped).
+function linkTarget(value: unknown): string {
+  if (isFileValue(value)) return value.path.replace(/\.md$/, "");
+  const raw = toStringValue(value);
+  const wikilink = parseWikilink(raw);
+  return wikilink ? `${wikilink.target}${wikilink.subpath}` : raw;
+}
+
 function buildFileValue(path: string): EvalContext["file"] {
   const normalized = path.trim();
   const lastSlash = normalized.lastIndexOf("/");
@@ -325,7 +341,7 @@ registerGlobalFunction("list", ([value]) => {
 });
 
 registerGlobalFunction("link", ([path, display]) => {
-  const target = isFileValue(path) ? path.path.replace(/\.md$/, "") : toStringValue(path);
+  const target = linkTarget(path);
   if (!target) return "";
   const label = isFileValue(display) ? display.basename : toStringValue(display);
   return label ? `[[${target}|${label}]]` : `[[${target}]]`;
@@ -711,7 +727,8 @@ registerMethodFunction("string", "title", (target) => {
 });
 
 registerMethodFunction("string", "asFile", (target, _args, context) => {
-  const path = toStringValue(target);
+  const raw = toStringValue(target);
+  const path = parseWikilink(raw)?.target ?? raw;
   if (!path) return undefined;
   const lookup = context._fileLookup;
   if (lookup) {
