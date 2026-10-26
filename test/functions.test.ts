@@ -619,6 +619,18 @@ describe("link helpers", () => {
     expect(evaluate('link("other/page", file)', context)).toBe("[[other/page|test]]");
   });
 
+  it("creates markdown links for external URLs in link()", () => {
+    expect(evaluate('link("https://example.com")', context)).toBe(
+      "[https://example.com](https://example.com)",
+    );
+    expect(evaluate('link("https://" + "example.com", "example.com")', context)).toBe(
+      "[example.com](https://example.com)",
+    );
+    expect(evaluate('link("http://example.com/a", file)', context)).toBe(
+      "[test](http://example.com/a)",
+    );
+  });
+
   it("handles file object in both arguments of link()", () => {
     expect(evaluate("link(file, file)", context)).toBe("[[notes/test|test]]");
   });
