@@ -328,6 +328,8 @@ registerGlobalFunction("link", ([path, display]) => {
   const target = isFileValue(path) ? path.path.replace(/\.md$/, "") : toStringValue(path);
   if (!target) return "";
   const label = isFileValue(display) ? display.basename : toStringValue(display);
+  // External URLs are not wikilinks; a markdown link renders as an external link
+  if (/^https?:\/\//i.test(target)) return `[${label || target}](${target})`;
   return label ? `[[${target}|${label}]]` : `[[${target}]]`;
 });
 
