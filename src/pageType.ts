@@ -60,7 +60,7 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
       const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
       const dotIndex = filePath.lastIndexOf(".");
       const ext = dotIndex >= 0 ? filePath.slice(dotIndex + 1) : "";
-      const basesSelfContext = {
+      const basesSelfContext: EvalContext["self"] = {
         file: {
           name: filePath.split("/").pop() ?? baseName,
           basename: baseName,
@@ -72,6 +72,16 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
         },
       };
 
+      const links = [
+        ...new Set(
+          (basesData.views ?? []).flatMap((view) =>
+            resolveBasesEntries(basesData, allFileData, view, basesSelfContext).entries.map(
+              (e) => e.slug as SimpleSlug,
+            ),
+          ),
+        ),
+      ];
+
       virtualPages.push({
         slug,
         title: baseName,
@@ -82,12 +92,7 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
           filePath: joinSegments(ctx.argv.directory, filePath) as FilePath,
           relativePath: filePath as unknown as FilePath,
           frontmatter: { title: baseName, tags: [] },
-          links: resolveBasesEntries(
-            basesData,
-            allFileData,
-            undefined,
-            basesSelfContext,
-          ).entries.map((e) => e.slug as SimpleSlug),
+          links,
           basesData,
           basesOptions: opts,
           basesSelfContext,
