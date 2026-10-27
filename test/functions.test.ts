@@ -337,9 +337,12 @@ describe("list functions and methods", () => {
       self: {
         file: {
           name: "Paul Chambers",
+          basename: "Paul Chambers",
           path: "artists/Paul Chambers.md",
           folder: "artists",
           ext: "md",
+          tags: [],
+          links: [],
         },
       },
       note: { ...context.note, list: ["[[Paul Chambers]]"] },
@@ -376,9 +379,12 @@ describe("list functions and methods", () => {
     const self = {
       file: {
         name: "Paul Chambers",
+        basename: "Paul Chambers",
         path: "artists/Paul Chambers.md",
         folder: "artists",
         ext: "md",
+        tags: [],
+        links: [],
       },
     };
     const bareCtx = { ...context, self, note: { ...context.note, list: ["Paul Chambers"] } };
@@ -397,9 +403,12 @@ describe("list functions and methods", () => {
       self: {
         file: {
           name: "Paul Chambers",
+          basename: "Paul Chambers",
           path: "artists/Paul Chambers.md",
           folder: "artists",
           ext: "md",
+          tags: [],
+          links: [],
         },
       },
       note: { ...context.note, list: ["[[Paul Chambers]]"] },
@@ -411,9 +420,12 @@ describe("list functions and methods", () => {
     const self = {
       file: {
         name: "Paul Chambers",
+        basename: "Paul Chambers",
         path: "artists/Paul Chambers.md",
         folder: "artists",
         ext: "md",
+        tags: [],
+        links: [],
       },
     };
     const slugCtx = {
@@ -769,5 +781,211 @@ describe("link-valued needles (this.file.asLink())", () => {
     expect(evaluate('"[[Alice]]".contains(missing)', ctx({}))).toBe(false);
     expect(evaluate('contains("[[Alice]]", missing)', ctx({}))).toBe(false);
     expect(evaluate('"hello".contains("")', ctx({}))).toBe(true);
+  });
+});
+
+describe("self.file compatibility", () => {
+  const selfFile: EvalContext["file"] = {
+    name: "Example",
+    basename: "Example",
+    path: "Folder/Example.md",
+    folder: "Folder",
+    ext: "md",
+    tags: ["project", "important"],
+    links: ["target"],
+    properties: { status: "active" },
+  };
+
+  const ctx: EvalContext = {
+    ...context,
+    self: { file: selfFile },
+  };
+
+  it("resolves this.file properties", () => {
+    expect(evaluate("this.file.name", ctx)).toBe("Example");
+    expect(evaluate("this.file.basename", ctx)).toBe("Example");
+    expect(evaluate("this.file.path", ctx)).toBe("Folder/Example.md");
+    expect(evaluate("this.file.folder", ctx)).toBe("Folder");
+    expect(evaluate("this.file.ext", ctx)).toBe("md");
+  });
+
+  it("supports this.file.asLink()", () => {
+    expect(evaluate("this.file.asLink()", ctx)).toBe("[[Folder/Example]]");
+
+    expect(evaluate('this.file.asLink("Custom")', ctx)).toBe("[[Folder/Example|Custom]]");
+  });
+
+  it("supports link(this.file)", () => {
+    expect(evaluate("link(this.file)", ctx)).toBe("[[Folder/Example]]");
+  });
+
+  it("dispatches self.file methods correctly", () => {
+    expect(evaluate('this.file.inFolder("Folder")', ctx)).toBe(true);
+    expect(evaluate('this.file.hasTag("project")', ctx)).toBe(true);
+    expect(evaluate('this.file.hasTag("missing")', ctx)).toBe(false);
+    expect(evaluate('this.file.hasLink("target")', ctx)).toBe(true);
+    expect(evaluate('this.file.hasLink("missing")', ctx)).toBe(false);
+  });
+
+  it("does not confuse this.file with the current entry file", () => {
+    expect(evaluate("file.path", ctx)).toBe("notes/test.md");
+    expect(evaluate("this.file.path", ctx)).toBe("Folder/Example.md");
+    expect(evaluate("file.asLink()", ctx)).toBe("[[notes/test]]");
+    expect(evaluate("this.file.asLink()", ctx)).toBe("[[Folder/Example]]");
+  });
+
+  it("supports standalone .base files", () => {
+    const baseCtx: EvalContext = {
+      ...context,
+      self: {
+        file: {
+          name: "Templates",
+          basename: "Templates",
+          path: "Templates.base",
+          folder: "",
+          ext: "base",
+          tags: [],
+          links: [],
+        },
+      },
+    };
+
+    expect(evaluate("this.file.asLink()", baseCtx)).toBe("[[Templates.base]]");
+  });
+});
+
+describe("wikilink compatibility", () => {
+  it.each([
+    ["[[Apple]]", "[[Apple]]"],
+    ["[[Apple|Red Apple]]", "[[Apple]]"],
+    ["[[Apple#Heading]]", "[[Apple#Heading]]"],
+    ["[[Apple#Heading|Alias]]", "[[Apple#Heading]]"],
+    [" [[Apple]] ", "[[Apple]]"],
+  ])("normalizes link(%s)", (input, expected) => {
+    const ctx = {
+      ...context,
+      note: { ...context.note, value: input },
+    };
+    expect(evaluate("link(note.value)", ctx)).toBe(expected);
+  });
+
+  it.each([
+    ["[[Apple]]", "Apple"],
+    ["[[Apple|Red Apple]]", "Apple"],
+    ["[[Apple#Heading]]", "Apple"],
+    ["[[Apple#Heading|Alias]]", "Apple"],
+    ["[[Folder/Apple.md]]", "Folder/Apple.md"],
+  ])("resolves %s through asFile()", (input, expectedPath) => {
+    const ctx = {
+      ...context,
+      note: { ...context.note, value: input },
+      _fileLookup: new Map<string, EvalContext["file"]>(),
+    };
+
+    const result = evaluate("note.value.asFile()", ctx) as EvalContext["file"];
+    expect(result.path).toBe(expectedPath);
+  });
+
+  it.each([
+    "[[Apple]]",
+    "[[Apple|Alias]]",
+    "[[Apple#Heading]]",
+    "[[Apple#Heading|Alias]]",
+    "[[Folder/Apple]]",
+    "Apple",
+  ])("matches %s against this", (value) => {
+    const ctx: EvalContext = {
+      ...context,
+      self: {
+        file: {
+          name: "Apple",
+          basename: "Apple",
+          path: "Folder/Apple.md",
+          folder: "Folder",
+          ext: "md",
+          tags: [],
+          links: [],
+        },
+      },
+      note: { ...context.note, refs: [value] },
+    };
+
+    expect(evaluate("refs.contains(this)", ctx)).toBe(true);
+    expect(evaluate("contains(refs, this)", ctx)).toBe(true);
+  });
+
+  it("does not match unrelated links", () => {
+    const ctx: EvalContext = {
+      ...context,
+      self: {
+        file: {
+          name: "Apple",
+          basename: "Apple",
+          path: "Folder/Apple.md",
+          folder: "Folder",
+          ext: "md",
+          tags: [],
+          links: [],
+        },
+      },
+      note: {
+        ...context.note,
+        refs: ["[[Banana]]", "[[Pineapple]]"],
+      },
+    };
+
+    expect(evaluate("refs.contains(this)", ctx)).toBe(false);
+  });
+
+  it("matches .base file paths against this", () => {
+    const ctx: EvalContext = {
+      ...context,
+      self: {
+        file: {
+          name: "Templates",
+          basename: "Templates",
+          path: "Templates.base",
+          folder: "",
+          ext: "base",
+          tags: [],
+          links: [],
+        },
+      },
+      note: {
+        ...context.note,
+        refs: ["Templates.base"],
+      },
+    };
+
+    expect(evaluate("refs.contains(this)", ctx)).toBe(true);
+    expect(evaluate("contains(refs, this)", ctx)).toBe(true);
+  });
+
+  it("resolves wikilinks to existing files", () => {
+    const file: EvalContext["file"] = {
+      name: "Apple",
+      basename: "Apple",
+      path: "Folder/Apple.md",
+      folder: "Folder",
+      ext: "md",
+      tags: ["fruit"],
+      links: [],
+    };
+
+    const ctx: EvalContext = {
+      ...context,
+      note: {
+        ...context.note,
+        value: "[[Apple|Red Apple]]",
+      },
+      _fileLookup: new Map([
+        ["Folder/Apple.md", file],
+        ["Apple", file],
+      ]),
+    };
+
+    expect(evaluate("note.value.asFile().path", ctx)).toBe("Folder/Apple.md");
+
+    expect(evaluate("note.value.asFile().hasTag('fruit')", ctx)).toBe(true);
   });
 });

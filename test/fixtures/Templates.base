@@ -1,0 +1,208 @@
+views:
+  - type: table
+    name: lob-brands
+    filters:
+      and:
+        - type == "brand"
+        - list(lob).contains(this)
+    order:
+      - file.name
+      - parent
+      - authorized
+  - type: table
+    name: lob-categories
+    filters:
+      and:
+        - type == "category"
+        - list(lob).contains(this)
+    order:
+      - file.name
+  - type: table
+    name: lob-linked
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+        - type != "brand"
+        - type != "category"
+    order:
+      - file.name
+      - type
+      - file.mtime
+  - type: table
+    name: company-brands
+    filters:
+      and:
+        - type == "brand"
+        - list(parent).contains(this)
+    order:
+      - file.name
+      - lob
+      - authorized
+    columnSize:
+      note.lob: 517
+  - type: table
+    name: company-sites
+    filters:
+      and:
+        - type == "site"
+        - list(parent).contains(this)
+    order:
+      - file.name
+  - type: table
+    name: company-contacts
+    filters:
+      and:
+        - type == "contact"
+        - list(company).contains(this)
+    order:
+      - file.name
+      - kind
+      - role
+      - email
+      - phone
+  - type: table
+    name: company-linked
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+        - type != "contact"
+        - type != "brand"
+        - type != "site"
+    order:
+      - file.name
+      - type
+      - file.mtime
+  - type: table
+    name: brand-products
+    filters:
+      and:
+        - type == "product"
+        - list(brand).contains(this)
+    order:
+      - file.name
+      - category
+  - type: table
+    name: brand-contacts
+    filters:
+      and:
+        - type == "contact"
+        - list(brands).contains(this)
+    order:
+      - file.name
+      - company
+      - role
+      - email
+  - type: table
+    name: brand-field-notes
+    filters:
+      and:
+        - type == "field-note"
+        - file.links.contains(this)
+    order:
+      - file.name
+      - date
+      - site
+    sort:
+      - property: date
+        direction: DESC
+  - type: table
+    name: brand-linked
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+        - type != "product"
+        - type != "contact"
+        - type != "field-note"
+    order:
+      - file.name
+      - type
+      - file.mtime
+  - type: table
+    name: site-contacts
+    filters:
+      and:
+        - type == "contact"
+        - list(site).contains(this)
+    order:
+      - file.name
+      - company
+      - role
+      - email
+      - phone
+  - type: table
+    name: site-field-notes
+    filters:
+      and:
+        - type == "field-note"
+        - list(site).contains(this)
+    order:
+      - file.name
+      - date
+      - series
+    sort:
+      - property: date
+        direction: DESC
+  - type: table
+    name: site-linked
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+        - type != "contact"
+        - type != "field-note"
+    order:
+      - file.name
+      - type
+      - file.mtime
+  - type: table
+    name: contact-field-notes
+    filters:
+      and:
+        - type == "field-note"
+        - file.links.contains(this)
+    order:
+      - file.name
+      - date
+      - site
+    sort:
+      - property: date
+        direction: DESC
+  - type: table
+    name: contact-linked
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+        - type != "field-note"
+    order:
+      - file.name
+      - type
+      - file.mtime
+  - type: table
+    name: products-linked
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+  - type: table
+    name: unit-category
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+        - type == "unit"
+    order:
+      - file.name
+      - site
+  - type: table
+    name: units-linked
+    filters:
+      and:
+        - file.links.contains(this)
+        - file.path != this.file.path
+    order:
+      - file.name
+      - type
