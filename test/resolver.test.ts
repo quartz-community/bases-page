@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildSelfContext, resolveBasesEntries } from "../src/resolver";
+import type { EvalContext } from "../src/compiler";
 import type { SimpleSlug } from "@quartz-community/utils";
 import type { BasesData, BasesView, FilePath, FullSlug, QuartzPluginData } from "../src/types";
 
@@ -585,9 +586,12 @@ describe("resolveBasesEntries", () => {
     const selfContext = {
       file: {
         name: "My Base",
+        basename: "My Base",
         path: "bases/My Base.base",
         folder: "bases",
         ext: "base",
+        tags: [],
+        links: [],
       },
     };
     const result = resolveBasesEntries(basesData, files, undefined, selfContext);
@@ -789,5 +793,102 @@ describe("this context of a base embedded in a note", () => {
       files,
     );
     expect(linked.entries[0]?.formulaValues.target).toBe("canvas");
+  });
+});
+
+describe("self-context view filters", () => {
+  const files = [
+    makeFile({
+      slug: "people/alice",
+      filePath: "people/alice.md",
+      links: ["places/tavern"],
+      frontmatter: { status: "active" },
+    }),
+    makeFile({
+      slug: "people/bob",
+      filePath: "people/bob.md",
+      links: ["places/tavern"],
+      frontmatter: { status: "inactive" },
+    }),
+    makeFile({
+      slug: "people/carol",
+      filePath: "people/carol.md",
+      links: ["places/other"],
+      frontmatter: { status: "active" },
+    }),
+    makeFile({
+      slug: "places/tavern",
+      filePath: "places/tavern.md",
+    }),
+  ];
+
+  const self: NonNullable<EvalContext["self"]> = {
+    file: {
+      name: "tavern",
+      basename: "tavern",
+      path: "places/tavern.md",
+      folder: "places",
+      ext: "md",
+      tags: [],
+      links: [],
+    },
+  };
+
+  it("matches file.links.contains(this)", () => {
+    const bases: BasesData = {
+      filters: "file.links.contains(this)",
+    };
+
+    const result = resolveBasesEntries(bases, files, undefined, self);
+
+    expect(result.entries.map((entry) => entry.slug)).toEqual(["people/alice", "people/bob"]);
+  });
+
+  it("combines global and view filters", () => {
+    const bases: BasesData = {
+      filters: 'status == "active"',
+    };
+
+    const view: BasesView = {
+      type: "table",
+      filters: "file.links.contains(this)",
+    };
+
+    const result = resolveBasesEntries(bases, files, view, self);
+
+    expect(result.entries.map((entry) => entry.slug)).toEqual(["people/alice"]);
+  });
+
+  it("respects view limits after sorting", () => {
+    const bases: BasesData = {};
+
+    const view: BasesView = {
+      type: "table",
+      filters: "file.links.contains(this)",
+      sort: [{ property: "file.name", direction: "DESC" }],
+      limit: 1,
+    };
+
+    const result = resolveBasesEntries(bases, files, view, self);
+
+    expect(result.total).toBe(2);
+    expect(result.entries.map((entry) => entry.slug)).toEqual(["people/bob"]);
+  });
+
+  it("excludes unlisted matching files", () => {
+    const hidden = makeFile({
+      slug: "people/hidden",
+      filePath: "people/hidden.md",
+      links: ["places/tavern"],
+      unlisted: true,
+    });
+
+    const bases: BasesData = {
+      filters: "file.links.contains(this)",
+    };
+
+    const result = resolveBasesEntries(bases, [...files, hidden], undefined, self);
+
+    expect(result.entries.map((entry) => entry.slug)).toEqual(["people/alice", "people/bob"]);
   });
 });
