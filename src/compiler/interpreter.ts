@@ -21,7 +21,9 @@ export type EvalContext = {
   };
   formula: Record<string, unknown>;
   self?: {
-    file: {
+    // The note (or .base file) the base is rendered in. A full file value, so
+    // this.file.asLink(), this.file.inFolder(...) etc. work like file.*.
+    file: Partial<EvalContext["file"]> & {
       name: string;
       path: string;
       folder: string;

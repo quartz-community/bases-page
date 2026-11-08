@@ -7,6 +7,13 @@ function normalizeStringArray(values: unknown): string[] {
   return values.filter((value): value is string => typeof value === "string");
 }
 
+// Real notes carry the source `filePath` Quartz's parser sets. Virtual pages
+// (404, tag and folder listings, .base pages, …) only get a synthetic
+// `<slug>.md` relativePath; they are not notes, and Obsidian never lists them.
+function isSourceNote(fileData: QuartzPluginData): boolean {
+  return typeof fileData.filePath === "string" && fileData.filePath !== "";
+}
+
 function getFilePath(fileData: QuartzPluginData, slug: string): string {
   // Prefer relativePath (relative to content dir) over filePath (absolute).
   // Self-context paths from .base files use ctx.allFiles which are relative,
@@ -73,6 +80,17 @@ function buildFileProperties(
   };
 }
 
+/**
+ * The `this` context for a base rendered inside a note: `this.file` is the
+ * embedding note's full file value (as `file` is for each entry), so methods
+ * such as `this.file.asLink()` and `this.file.inFolder()` work.
+ */
+export function buildSelfContext(fileData: QuartzPluginData): NonNullable<EvalContext["self"]> {
+  const slug = typeof fileData.slug === "string" ? fileData.slug : "";
+  const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
+  return { file: { ...buildFileProperties(fileData, slug, frontmatter), properties: frontmatter } };
+}
+
 function compareSort(a: unknown, b: unknown): number {
   if (a === b) return 0;
   if (a === undefined || a === null) return 1;
@@ -131,6 +149,7 @@ export function resolveBasesEntries(
   const fileLookup = new Map<string, EvalContext["file"]>();
   for (const fd of allFiles) {
     if ((fd as { unlisted?: unknown }).unlisted === true) continue;
+    if (!isSourceNote(fd)) continue;
     const fdSlug = typeof fd.slug === "string" ? fd.slug : "";
     if (!fdSlug) continue;
     const fdPath = getFilePath(fd, fdSlug);
@@ -155,6 +174,7 @@ export function resolveBasesEntries(
 
   for (const fileData of allFiles) {
     if ((fileData as { unlisted?: unknown }).unlisted === true) continue;
+    if (!isSourceNote(fileData)) continue;
     const slug = typeof fileData.slug === "string" ? fileData.slug : "";
     if (!slug) continue;
 

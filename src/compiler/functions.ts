@@ -278,6 +278,60 @@ function buildFileValue(path: string): EvalContext["file"] {
   };
 }
 
+// Looks a path, slug or bare name up in the file index (as asFile() does).
+function lookupFile(path: string, context: EvalContext): EvalContext["file"] | undefined {
+  const lookup = context._fileLookup;
+  if (!lookup) return undefined;
+  const normalized = path.trim();
+  if (!normalized) return undefined;
+  const found =
+    lookup.get(normalized) ??
+    lookup.get(normalized.replace(/\.md$/, "")) ??
+    (!normalized.endsWith(".md") ? lookup.get(`${normalized}.md`) : undefined);
+  if (found) return found;
+
+  // Fallback: match by path suffix (e.g. "Apple" matches "Compendium/Species/Dryad/Apple")
+  const suffix = `/${normalized}`;
+  const suffixMd = `/${normalized}.md`;
+  for (const [key, value] of lookup) {
+    if (key.endsWith(suffix) || key.endsWith(suffixMd)) return value;
+  }
+  return undefined;
+}
+
+// A wikilink string such as this.file.asLink() returns ("[[people/Alice]]"), resolved to the
+// file it points at, so it can be compared like a link rather than as text.
+function resolveLink(value: unknown, context: EvalContext): { name: string; path: string } | null {
+  if (typeof value !== "string") return null;
+  const wikilink = parseWikilink(value);
+  if (!wikilink) return null;
+  const path = lookupFile(wikilink.target, context)?.path ?? wikilink.target;
+  const fileName = path.slice(path.lastIndexOf("/") + 1);
+  return { name: fileName.replace(/\.md$/, ""), path };
+}
+
+function sameLinkTarget(left: { path: string }, right: { path: string }): boolean {
+  return (
+    slugifyFilePath(left.path.trim() as FilePath) === slugifyFilePath(right.path.trim() as FilePath)
+  );
+}
+
+// list.contains(needle) / contains(list, needle): matches values, `this` / file values, and
+// wikilinks (e.g. this.file.asLink()) against list items that are links, slugs or names.
+function listContains(list: unknown[], needle: unknown, context: EvalContext): boolean {
+  if (list.includes(needle)) return true;
+  if (needle === undefined || needle === null) return false;
+  const link = resolveLink(needle, context);
+  if (link) return listContainsName(list, link.name, link.path);
+  if (typeof needle === "string") {
+    const slugNeedle = slugifyPath(needle);
+    if (list.some((item) => typeof item === "string" && slugifyPath(item) === slugNeedle))
+      return true;
+  }
+  const name = resolveSelfName(needle);
+  return name ? listContainsName(list, name, resolveSelfPath(needle)) : false;
+}
+
 function getMethodTarget(value: unknown): MethodTarget | undefined {
   if (typeof value === "string") return "string";
   if (typeof value === "number" && !Number.isNaN(value)) return "number";
@@ -292,13 +346,9 @@ registerGlobalFunction("if", ([cond, whenTrue, whenFalse]) => {
   return cond ? whenTrue : whenFalse;
 });
 
-registerGlobalFunction("contains", ([haystack, needle]) => {
-  if (Array.isArray(haystack)) {
-    if (haystack.includes(needle)) return true;
-    const name = resolveSelfName(needle);
-    return name ? listContainsName(haystack, name, resolveSelfPath(needle)) : false;
-  }
-  if (typeof haystack === "string") return haystack.includes(toStringValue(needle));
+registerGlobalFunction("contains", ([haystack, needle], context) => {
+  if (Array.isArray(haystack)) return listContains(haystack, needle, context);
+  if (typeof haystack === "string") return stringContains(haystack, needle, context);
   return false;
 });
 
@@ -400,9 +450,10 @@ registerMethodFunction("file", "hasLink", (target, [link]) => {
 
 registerMethodFunction("file", "inFolder", (target, [folder]) => {
   if (!isFileValue(target)) return false;
-  const value = toStringValue(folder);
-  if (!value) return false;
-  const normalized = value.endsWith("/") ? value.slice(0, -1) : value;
+  if (typeof folder !== "string") return false;
+  const normalized = folder.trim().replace(/^\/+|\/+$/g, "");
+  // The content root ("" here, "/" in Obsidian) contains every file.
+  if (normalized === "") return true;
   return target.folder === normalized || target.folder.startsWith(`${normalized}/`);
 });
 
@@ -421,10 +472,20 @@ registerMethodFunction("file", "hasProperty", (_target, [prop], context) => {
   return true;
 });
 
-registerMethodFunction("string", "contains", (target, [needle]) => {
+// A missing needle (e.g. an unresolved property) matches nothing rather than "" matching all.
+// A link-valued string ("[[Alice]]") contains a link to the same file ("[[people/Alice]]").
+function stringContains(target: unknown, needle: unknown, context: EvalContext): boolean {
+  if (needle === undefined || needle === null) return false;
   const value = toStringValue(target);
+  const needleLink = resolveLink(needle, context);
+  const valueLink = needleLink ? resolveLink(value, context) : null;
+  if (needleLink && valueLink && sameLinkTarget(valueLink, needleLink)) return true;
   return value.includes(toStringValue(needle));
-});
+}
+
+registerMethodFunction("string", "contains", (target, [needle], context) =>
+  stringContains(target, needle, context),
+);
 
 registerMethodFunction("string", "startsWith", (target, [prefix]) => {
   const value = toStringValue(target);
@@ -730,37 +791,13 @@ registerMethodFunction("string", "asFile", (target, _args, context) => {
   const raw = toStringValue(target);
   const path = parseWikilink(raw)?.target ?? raw;
   if (!path) return undefined;
-  const lookup = context._fileLookup;
-  if (lookup) {
-    const normalized = path.trim();
-    const found =
-      lookup.get(normalized) ??
-      lookup.get(normalized.replace(/\.md$/, "")) ??
-      (!normalized.endsWith(".md") ? lookup.get(`${normalized}.md`) : undefined);
-    if (found) return { ...found };
-
-    // Fallback: match by path suffix (e.g. "Apple" matches "Compendium/Species/Dryad/Apple")
-    const suffix = `/${normalized}`;
-    const suffixMd = `/${normalized}.md`;
-    for (const [key, value] of lookup) {
-      if (key.endsWith(suffix) || key.endsWith(suffixMd)) {
-        return { ...value };
-      }
-    }
-  }
-  return buildFileValue(path);
+  const found = lookupFile(path, context);
+  return found ? { ...found } : buildFileValue(path);
 });
 
-registerMethodFunction("list", "contains", (target, [needle]) => {
+registerMethodFunction("list", "contains", (target, [needle], context) => {
   if (!Array.isArray(target)) return false;
-  if (target.includes(needle)) return true;
-  if (typeof needle === "string") {
-    const slugNeedle = slugifyPath(needle);
-    if (target.some((item) => typeof item === "string" && slugifyPath(item) === slugNeedle))
-      return true;
-  }
-  const name = resolveSelfName(needle);
-  return name ? listContainsName(target, name, resolveSelfPath(needle)) : false;
+  return listContains(target, needle, context);
 });
 
 registerMethodFunction("list", "containsAll", (target, args) => {

@@ -537,6 +537,13 @@ describe("duration and file helpers", () => {
     expect(evaluate('file.hasTag("todo")', context)).toBe(true);
     expect(evaluate('file.hasLink("other-note")', context)).toBe(true);
     expect(evaluate('file.inFolder("notes/archive")', context)).toBe(false);
+    // The content root ("" for a root note's this.file.folder, "/" in Obsidian) holds every file.
+    expect(evaluate('file.inFolder("")', context)).toBe(true);
+    expect(evaluate('file.inFolder("/")', context)).toBe(true);
+    expect(evaluate('file("index.md").inFolder("")', context)).toBe(true);
+    expect(evaluate("file.inFolder(missing)", context)).toBe(false);
+    expect(evaluate('file.inFolder("/notes/")', context)).toBe(true);
+    expect(evaluate('file.inFolder("note")', context)).toBe(false);
     expect(evaluate('file.hasProperty("status")', context)).toBe(true);
   });
 
@@ -662,5 +669,67 @@ describe("object methods", () => {
 
   it("supports values", () => {
     expect(evaluate("meta.values()", context)).toEqual(["value", 5]);
+  });
+});
+
+describe("link-valued needles (this.file.asLink())", () => {
+  const self = {
+    file: {
+      name: "Alice",
+      basename: "Alice",
+      path: "people/Alice.md",
+      folder: "people",
+      ext: "md",
+      tags: [],
+      links: [],
+    },
+  };
+  const lookup = new Map<string, EvalContext["file"]>([["people/Alice.md", self.file]]);
+  const ctx = (note: Record<string, unknown>, links: string[] = []) => ({
+    ...context,
+    self,
+    _fileLookup: lookup,
+    note,
+    file: { ...context.file, links },
+  });
+
+  it("this.file.asLink() links to the embedding note", () => {
+    expect(evaluate("this.file.asLink()", ctx({}))).toBe("[[people/Alice]]");
+  });
+
+  it("matches scalar and list link properties and resolved file links", () => {
+    expect(evaluate("authors.contains(this.file.asLink())", ctx({ authors: "[[Alice]]" }))).toBe(
+      true,
+    );
+    expect(
+      evaluate(
+        "authors.contains(this.file.asLink())",
+        ctx({ authors: ["[[Carol]]", "[[Alice]]"] }),
+      ),
+    ).toBe(true);
+    expect(evaluate("contains(authors, this.file.asLink())", ctx({ authors: ["[[Alice]]"] }))).toBe(
+      true,
+    );
+    expect(evaluate("file.links.contains(this.file.asLink())", ctx({}, ["people/alice"]))).toBe(
+      true,
+    );
+  });
+
+  it("does not match other notes", () => {
+    expect(evaluate("authors.contains(this.file.asLink())", ctx({ authors: "[[Bob]]" }))).toBe(
+      false,
+    );
+    expect(evaluate("authors.contains(this.file.asLink())", ctx({ authors: ["[[Bob]]"] }))).toBe(
+      false,
+    );
+    expect(evaluate("file.links.contains(this.file.asLink())", ctx({}, ["people/bob"]))).toBe(
+      false,
+    );
+  });
+
+  it("a missing needle matches nothing", () => {
+    expect(evaluate('"[[Alice]]".contains(missing)', ctx({}))).toBe(false);
+    expect(evaluate('contains("[[Alice]]", missing)', ctx({}))).toBe(false);
+    expect(evaluate('"hello".contains("")', ctx({}))).toBe(true);
   });
 });

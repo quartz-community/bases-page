@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveBasesEntries } from "../src/resolver";
+import { buildSelfContext, resolveBasesEntries } from "../src/resolver";
 import type { SimpleSlug } from "@quartz-community/utils";
 import type { BasesData, BasesView, FilePath, FullSlug, QuartzPluginData } from "../src/types";
 
@@ -632,5 +632,94 @@ describe("resolveBasesEntries", () => {
       "notes/with-false",
       "notes/with-null",
     ]);
+  });
+});
+
+describe("this context of a base embedded in a note", () => {
+  const people = [
+    makeFile({
+      slug: "people/alice",
+      filePath: "people/Alice.md",
+      frontmatter: { title: "Alice" },
+    }),
+    makeFile({ slug: "people/bob", filePath: "people/Bob.md", frontmatter: { title: "Bob" } }),
+    makeFile({
+      slug: "guides/solo",
+      filePath: "guides/Solo.md",
+      frontmatter: { authors: "[[Alice]]" },
+    }),
+    makeFile({
+      slug: "guides/joint",
+      filePath: "guides/Joint.md",
+      frontmatter: { authors: ["[[Alice]]", "[[Carol]]"] },
+    }),
+    makeFile({ slug: "guides/bob-notes", filePath: "guides/Bob Notes.md", links: ["people/bob"] }),
+  ];
+  const mentions: BasesData = {
+    filters: {
+      or: ["file.links.contains(this.file.asLink())", "authors.contains(this.file.asLink())"],
+    },
+  };
+  const slugsFor = (self: QuartzPluginData) =>
+    resolveBasesEntries(mentions, people, undefined, buildSelfContext(self))
+      .entries.map((entry) => entry.slug)
+      .sort();
+
+  // quartz-community/bases-page#12
+  it("resolves this.file.asLink() against each embedding note", () => {
+    expect(slugsFor(people[0]!)).toEqual(["guides/joint", "guides/solo"]);
+    expect(slugsFor(people[1]!)).toEqual(["guides/bob-notes"]);
+  });
+
+  it("exposes the embedding note as a full file value", () => {
+    const self = buildSelfContext(people[2]!);
+    expect(self.file).toMatchObject({
+      name: "Solo",
+      basename: "Solo",
+      path: "guides/Solo.md",
+      folder: "guides",
+      ext: "md",
+      properties: { authors: "[[Alice]]" },
+    });
+  });
+
+  // quartz-community/bases-page#19
+  it("file.inFolder(this.file.folder) in a root note matches every note", () => {
+    const home = makeFile({ slug: "index", filePath: "index.md" });
+    const result = resolveBasesEntries(
+      { filters: "file.inFolder(this.file.folder)" },
+      [home, ...people],
+      undefined,
+      buildSelfContext(home),
+    );
+    expect(result.total).toBe(people.length + 1);
+  });
+
+  // quartz-community/bases-page#20
+  it("skips virtual pages, which have no source filePath", () => {
+    const home = makeFile({ slug: "index", filePath: "index.md" });
+    const virtual = (slug: string, unlisted = false) =>
+      ({
+        slug: asFullSlug(slug),
+        relativePath: asFilePath(`${slug}.md`),
+        frontmatter: { title: slug, tags: [] },
+        ...(unlisted ? { unlisted: true } : {}),
+      }) as QuartzPluginData;
+    const files = [home, ...people, virtual("404"), virtual("tags/index"), virtual("people/index")];
+    const all = resolveBasesEntries(
+      { filters: "file.path != this.file.path" },
+      files,
+      undefined,
+      buildSelfContext(home),
+    );
+    expect(all.entries.map((entry) => entry.slug).sort()).toEqual(
+      people.map((file) => file.slug).sort(),
+    );
+    // ...and cannot be dereferenced via asFile() either
+    const linked = resolveBasesEntries(
+      { formulas: { target: '"[[404]]".asFile().properties' } },
+      files,
+    );
+    expect(linked.entries[0]?.formulaValues.target).toBeUndefined();
   });
 });
