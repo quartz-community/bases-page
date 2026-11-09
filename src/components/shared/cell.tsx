@@ -2,13 +2,26 @@ import type { ComponentChild } from "preact";
 import type { FullSlug } from "@quartz-community/types";
 
 import type { BasesData, BasesEntry, BasesView } from "../../types";
-import { renderTextWithLinks } from "./links";
-import { transformLink, slugifyPath } from "@quartz-community/utils";
+import { isResolvedLink, renderExternalLink, renderTextWithLinks } from "./links";
+import { transformLink, slugifyPath, slugTag } from "@quartz-community/utils";
+import {
+  Duration,
+  ErrorValue,
+  TagValue,
+  UrlValue,
+  coerceDateString,
+  displayDate,
+  humanizeDuration,
+} from "../../compiler/values";
 
 type RenderCtx = {
   slug: string;
   allSlugs: string[];
   linkResolution: "absolute" | "relative" | "shortest";
+  /** The site's locale, for dates and durations */
+  locale?: string;
+  /** Whether the site has tag pages; unset, a tag links when its page is in allSlugs */
+  tagPages?: boolean;
 };
 
 /**
@@ -31,14 +44,107 @@ function isFileValue(
 
 export function formatValue(value: unknown): string {
   if (value === undefined || value === null) return "";
+  // sortable: a duration sorts by its length
+  if (value instanceof Duration) return String(value.totalMilliseconds());
+  if (value instanceof ErrorValue) return "";
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString();
   if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
-export function renderCellValue(value: unknown, ctx: RenderCtx): ComponentChild {
+function isNoteProperty(column: string | undefined): boolean {
+  if (column === undefined) return false;
+  return !/^(formula|file|this)\./.test(column);
+}
+
+const TAG_PROPERTIES = new Set(["tags", "note.tags", "file.tags"]);
+
+/** `tags`, `note.tags` and `file.tags` hold tags (community PR #18). */
+export function isTagProperty(column: string | undefined): boolean {
+  return column !== undefined && TAG_PROPERTIES.has(column);
+}
+
+function asTags(value: unknown): unknown {
+  const toTag = (item: unknown) =>
+    typeof item === "string" && item.trim()
+      ? new TagValue(item.trim().startsWith("#") ? item.trim() : `#${item.trim()}`)
+      : item;
+  if (Array.isArray(value)) return value.map(toTag);
+  return toTag(value);
+}
+
+/**
+ * A tag shows as a link to its tag page, without `#` and in its own case: the static
+ * equivalent of Obsidian's tag pill, which opens a search for the tag.
+ */
+export function renderTag(tag: TagValue, ctx: RenderCtx): ComponentChild {
+  const target = `tags/${slugTag(tag.name)}`;
+  const href = transformLink(ctx.slug as FullSlug, target, {
+    strategy: "absolute",
+    allSlugs: ctx.allSlugs as FullSlug[],
+  });
+  // a value that isn't a valid tag (`a, b`) has no tag page
+  const valid = /^[\p{L}\p{N}\p{M}_\-/]+$/u.test(tag.name);
+  if (
+    !valid ||
+    ctx.tagPages === false ||
+    (ctx.tagPages === undefined && !isResolvedLink(href, ctx))
+  ) {
+    return <span class="tag-link">{tag.name}</span>;
+  }
+  return (
+    <a href={href} class="internal tag-link" data-slug={target}>
+      {tag.name}
+    </a>
+  );
+}
+
+export function renderCellValue(
+  rawValue: unknown,
+  ctx: RenderCtx,
+  column?: string,
+): ComponentChild {
+  // a note property holding an ISO date is a date, as in Obsidian (formula results that are
+  // text, and file names such as a daily note's `2024-03-05`, stay text)
+  const value = isTagProperty(column)
+    ? asTags(rawValue)
+    : isNoteProperty(column)
+      ? coerceDateString(rawValue)
+      : rawValue;
+  // as in Obsidian, an empty value is a blank cell
   if (value === null || value === undefined) {
-    return <span class="bases-empty">—</span>;
+    return <span class="bases-empty-value" />;
+  }
+
+  if (value instanceof ErrorValue) {
+    // as in Obsidian: the cell shows the formula's error
+    return (
+      <span class="bases-formula-error" title={value.message}>
+        <span class="bases-formula-error-icon" aria-hidden="true" />
+        <span class="bases-formula-error-message">{value.message}</span>
+      </span>
+    );
+  }
+
+  if (value instanceof UrlValue) {
+    return renderExternalLink(value.url, value.display);
+  }
+
+  if (value instanceof TagValue) return renderTag(value, ctx);
+
+  if (value instanceof Duration) {
+    return <span class="bases-duration">{humanizeDuration(value, ctx.locale)}</span>;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return <span class="bases-empty">—</span>;
+    // moment's `L` / `L LT` in the site's locale, as Obsidian shows dates
+    return (
+      <time class="bases-date" datetime={value.toISOString()}>
+        {displayDate(value, ctx.locale)}
+      </time>
+    );
   }
 
   if (typeof value === "boolean") {
@@ -65,6 +171,11 @@ export function renderCellValue(value: unknown, ctx: RenderCtx): ComponentChild 
   }
 
   if (typeof value === "object") {
+    // `this` shows as its file
+    const self = value as Record<string, unknown>;
+    if (!isFileValue(value) && isFileValue(self.file) && "note" in self) {
+      return renderCellValue(self.file, ctx);
+    }
     if (isFileValue(value)) {
       const href = transformLink(
         ctx.slug as FullSlug,
@@ -76,11 +187,18 @@ export function renderCellValue(value: unknown, ctx: RenderCtx): ComponentChild 
       );
       return (
         <a href={href} class="internal internal-link">
-          {value.basename}
+          {value.name || value.basename}
         </a>
       );
     }
-    return <code>{JSON.stringify(value)}</code>;
+    // as Obsidian shows an object: its values as text
+    const shown = Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        Array.isArray(item) ? item.map(String).join(", ") : item == null ? item : String(item),
+      ]),
+    );
+    return <code>{JSON.stringify(shown)}</code>;
   }
 
   return String(value);

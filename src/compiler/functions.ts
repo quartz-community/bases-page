@@ -1,16 +1,44 @@
 import type { EvalContext } from "./interpreter";
 import { slugifyFilePath, slugifyPath } from "@quartz-community/utils";
 import type { FilePath } from "@quartz-community/utils";
+import {
+  BasesDate,
+  FormulaError,
+  dateToString,
+  isDuration,
+  isTagValue,
+  formatMoment,
+  parseDuration,
+  parseIsoDate,
+  relativeFromNow,
+  URL_SCHEME_RE,
+  UrlValue,
+  isUrlValue,
+} from "./values";
+import { tagMatches } from "../tags";
 
 export type GlobalFunction = (args: unknown[], context: EvalContext) => unknown;
 export type MethodFunction = (target: unknown, args: unknown[], context: EvalContext) => unknown;
-export type MethodTarget = "string" | "number" | "date" | "list" | "file" | "object";
+export type MethodTarget = "string" | "number" | "date" | "duration" | "list" | "file" | "object";
 
 export const globalFunctions = new Map<string, GlobalFunction>();
 export const methodFunctions = new Map<MethodTarget, Map<string, MethodFunction>>();
 
 export function getGlobalFunction(name: string): GlobalFunction | undefined {
   return globalFunctions.get(name);
+}
+
+/** The type name Obsidian uses in "Cannot find function" errors. */
+export function methodTypeName(value: unknown): string {
+  if (isDuration(value)) return "Duration";
+  if (isTagValue(value) || typeof value === "string") return "String";
+  if (isUrlValue(value)) return "Url";
+  if (typeof value === "number") return "Number";
+  if (typeof value === "boolean") return "Boolean";
+  if (value instanceof Date) return "Date";
+  if (Array.isArray(value)) return "List";
+  if (isFileValue(value)) return "File";
+  return "Object";
 }
 
 export function getMethodFunction(name: string, target: unknown): MethodFunction | undefined {
@@ -35,6 +63,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toStringValue(value: unknown): string {
   if (value === undefined || value === null) return "";
+  if (value instanceof Date) return dateToString(value);
   return String(value);
 }
 
@@ -133,111 +162,16 @@ function isDateValue(value: unknown): value is Date {
   return value instanceof Date;
 }
 
-function isAlpha(ch: string): boolean {
-  if (!ch) return false;
-  const code = ch.charCodeAt(0);
-  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
-}
-
-function isDigit(ch: string): boolean {
-  if (!ch) return false;
-  const code = ch.charCodeAt(0);
-  return code >= 48 && code <= 57;
-}
-
-function parseDuration(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-
-  const multipliers: Record<string, number> = {
-    ms: 1,
-    millisecond: 1,
-    milliseconds: 1,
-    s: 1000,
-    sec: 1000,
-    second: 1000,
-    seconds: 1000,
-    m: 60_000,
-    min: 60_000,
-    minute: 60_000,
-    minutes: 60_000,
-    h: 3_600_000,
-    hr: 3_600_000,
-    hour: 3_600_000,
-    hours: 3_600_000,
-    d: 86_400_000,
-    day: 86_400_000,
-    days: 86_400_000,
-    w: 604_800_000,
-    week: 604_800_000,
-    weeks: 604_800_000,
-    mo: 2_592_000_000,
-    month: 2_592_000_000,
-    months: 2_592_000_000,
-    y: 31_536_000_000,
-    year: 31_536_000_000,
-    years: 31_536_000_000,
-  };
-
-  let index = 0;
-  let total = 0;
-
-  while (index < trimmed.length) {
-    while (trimmed[index] === " " || trimmed[index] === "\t") {
-      index += 1;
-    }
-    if (index >= trimmed.length) break;
-
-    const start = index;
-    let hasDot = false;
-    while (index < trimmed.length) {
-      const ch = trimmed[index] ?? "";
-      if (isDigit(ch)) {
-        index += 1;
-        continue;
-      }
-      if (ch === "." && !hasDot) {
-        hasDot = true;
-        index += 1;
-        continue;
-      }
-      break;
-    }
-
-    if (start === index) return undefined;
-    const amount = Number(trimmed.slice(start, index));
-    if (Number.isNaN(amount)) return undefined;
-
-    while (index < trimmed.length && (trimmed[index] === " " || trimmed[index] === "\t")) {
-      index += 1;
-    }
-
-    const unitStart = index;
-    while (index < trimmed.length && isAlpha(trimmed[index] ?? "")) {
-      index += 1;
-    }
-    const unit = trimmed.slice(unitStart, index).toLowerCase();
-    const multiplier = unit ? multipliers[unit] : 1;
-    if (unit && multiplier === undefined) return undefined;
-
-    total += amount * (multiplier ?? 1);
-  }
-
-  return total;
-}
-
+// As in Obsidian, date() reads ISO-style strings (`2024-03-05`, `2024-03-05 14:30`,
+// `2024-03-05T14:30:00Z`) and compact `20240305`, in local time; anything else is null
+// (`05/03/2024`, `March 5, 2024`), whatever the locale.
 function parseDate(value: unknown): Date | undefined {
-  if (value instanceof Date) return value;
-  if (typeof value === "number") {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? undefined : date;
-  }
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    if (Number.isNaN(parsed)) return undefined;
-    return new Date(parsed);
-  }
-  return undefined;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value;
+  if (typeof value === "string") return parseIsoDate(value);
+  if (value === undefined || value === null) return undefined;
+  throw new FormulaError(
+    `Type error in "date", parameter "input". Expected String, given ${typeNameOf(value)}.`,
+  );
 }
 
 // Obsidian keeps wikilink syntax in link-valued frontmatter ("[[Apple]]", "[[Apple|alias]]",
@@ -265,11 +199,15 @@ function buildFileValue(path: string): EvalContext["file"] {
   const lastDot = fileName.lastIndexOf(".");
   const basename = lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
   const ext = lastDot > 0 ? fileName.slice(lastDot + 1) : "";
-  const folder = lastSlash >= 0 ? normalized.slice(0, lastSlash) : "";
+  const folder = lastSlash >= 0 ? normalized.slice(0, lastSlash) : "/";
+  const fullname = fileName || normalized;
+  const base = basename || fullname;
 
   return {
-    name: fileName || normalized,
-    basename: basename || fileName || normalized,
+    // as in Obsidian: a Markdown note's name has no extension, other files keep it
+    name: ext === "md" ? base : fullname,
+    basename: base,
+    fullname,
     path: normalized,
     folder,
     ext,
@@ -320,10 +258,18 @@ function sameLinkTarget(left: { path: string }, right: { path: string }): boolea
 // wikilinks (e.g. this.file.asLink()) against list items that are links, slugs or names.
 function listContains(list: unknown[], needle: unknown, context: EvalContext): boolean {
   if (list.includes(needle)) return true;
+  // a list of tags (file.tags, the tags property) contains a tag and its nested tags
+  if (list.some(isTagValue)) {
+    if (needle === undefined || needle === null) return false;
+    const query = String(needle);
+    return list.some((item) => (isTagValue(item) ? tagMatches(item.tag, query) : item === needle));
+  }
   if (needle === undefined || needle === null) return false;
   const link = resolveLink(needle, context);
   if (link) return listContainsName(list, link.name, link.path);
-  if (typeof needle === "string") {
+  // paths compare as slugs ("people/Alice" and "people/alice"); other text is exact, as in
+  // Obsidian (["Ab"].contains("ab") is false)
+  if (typeof needle === "string" && needle.includes("/")) {
     const slugNeedle = slugifyPath(needle);
     if (list.some((item) => typeof item === "string" && slugifyPath(item) === slugNeedle))
       return true;
@@ -332,7 +278,18 @@ function listContains(list: unknown[], needle: unknown, context: EvalContext): b
   return name ? listContainsName(list, name, resolveSelfPath(needle)) : false;
 }
 
+function typeNameOf(value: unknown): string {
+  if (isDuration(value)) return "Duration";
+  if (value instanceof Date) return "Date";
+  if (typeof value === "number") return "Number";
+  if (typeof value === "boolean") return "Boolean";
+  if (Array.isArray(value)) return "List";
+  return "Object";
+}
+
 function getMethodTarget(value: unknown): MethodTarget | undefined {
+  if (isDuration(value)) return "duration";
+  if (isTagValue(value)) return "string";
   if (typeof value === "string") return "string";
   if (typeof value === "number" && !Number.isNaN(value)) return "number";
   if (isDateValue(value)) return "date";
@@ -355,19 +312,23 @@ registerGlobalFunction("contains", ([haystack, needle], context) => {
 registerGlobalFunction("date", ([value]) => parseDate(value));
 
 registerGlobalFunction("duration", ([value]) => {
-  if (typeof value === "number") return value;
+  if (isDuration(value)) return value;
   if (typeof value === "string") return parseDuration(value);
-  return undefined;
+  if (value === undefined || value === null) return undefined;
+  throw new FormulaError(
+    `Type error in "duration", parameter "input". Expected String, given ${typeNameOf(value)}.`,
+  );
 });
 
-registerGlobalFunction("now", () => new Date());
+registerGlobalFunction("now", () => new BasesDate(Date.now(), true));
 
 registerGlobalFunction("today", () => {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return new BasesDate(new Date(now.getFullYear(), now.getMonth(), now.getDate()), false);
 });
 
 registerGlobalFunction("number", ([value]) => {
+  if (isDuration(value)) throw new FormulaError('Unable to convert "Duration" to a number.');
   const numberValue = toNumber(value);
   return numberValue === null ? undefined : numberValue;
 });
@@ -394,6 +355,9 @@ registerGlobalFunction("link", ([path, display]) => {
   const target = linkTarget(path);
   if (!target) return "";
   const label = isFileValue(display) ? display.basename : toStringValue(display);
+  // As in Obsidian, a target with a URL scheme (https:, mailto:, obsidian:, …) is an external
+  // link with that exact href; anything else is a link to a note.
+  if (URL_SCHEME_RE.test(target)) return new UrlValue(target, label || undefined);
   return label ? `[[${target}|${label}]]` : `[[${target}]]`;
 });
 
@@ -427,17 +391,14 @@ registerGlobalFunction("file", ([path]) => {
   return buildFileValue(path);
 });
 
+// As in Obsidian: true if the file has any of the tags or one of their nested tags,
+// ignoring case and a leading `#`.
 registerMethodFunction("file", "hasTag", (target, args) => {
   if (!isFileValue(target)) return false;
-  if (args.length === 0) return false;
-  return args.every((tag) => {
-    const value = toStringValue(tag)?.toLowerCase();
-    if (!value) return false;
-    const prefix = value.endsWith("/") ? value : `${value}/`;
-    return target.tags.some((t) => {
-      const lower = t.toLowerCase();
-      return lower === value || lower.startsWith(prefix);
-    });
+  return args.some((tag) => {
+    const query = toStringValue(tag);
+    if (!query) return false;
+    return target.tags.some((t) => tagMatches(String(t), query));
   });
 });
 
@@ -465,7 +426,8 @@ registerMethodFunction("file", "hasLink", (target, [link], context) => {
     path = resolveLink(raw, context)?.path ?? lookupFile(raw, context)?.path ?? raw;
   }
   const wanted = linkSlug(path);
-  return target.links.some((l) => linkSlug(l) === wanted);
+  // an embed (![[Tasks.base]]) is a link too
+  return [...target.links, ...(target.embeds ?? [])].some((l) => linkSlug(l) === wanted);
 });
 
 registerMethodFunction("file", "inFolder", (target, [folder]) => {
@@ -500,7 +462,8 @@ function stringContains(target: unknown, needle: unknown, context: EvalContext):
   const needleLink = resolveLink(needle, context);
   const valueLink = needleLink ? resolveLink(value, context) : null;
   if (needleLink && valueLink && sameLinkTarget(valueLink, needleLink)) return true;
-  return value.includes(toStringValue(needle));
+  // as in Obsidian, a string contains a text ignoring case
+  return value.toLowerCase().includes(toStringValue(needle).toLowerCase());
 }
 
 registerMethodFunction("string", "contains", (target, [needle], context) =>
@@ -584,112 +547,11 @@ registerMethodFunction("number", "abs", (target) => {
   return Math.abs(value);
 });
 
-const MONTH_NAMES_SHORT = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-const MONTH_NAMES_FULL = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-function formatDateToken(date: Date, token: string): string {
-  const pad = (n: number, len = 2) => String(n).padStart(len, "0");
-  const y = date.getFullYear();
-  const M = date.getMonth() + 1;
-  const d = date.getDate();
-  const H = date.getHours();
-  const h = H % 12 || 12;
-  const m = date.getMinutes();
-  const s = date.getSeconds();
-  const A = H < 12 ? "AM" : "PM";
-
-  switch (token) {
-    case "YYYY":
-      return String(y);
-    case "YY":
-      return String(y).slice(-2);
-    case "MMMM":
-      return MONTH_NAMES_FULL[date.getMonth()]!;
-    case "MMM":
-      return MONTH_NAMES_SHORT[date.getMonth()]!;
-    case "MM":
-      return pad(M);
-    case "M":
-      return String(M);
-    case "DD":
-      return pad(d);
-    case "D":
-      return String(d);
-    case "HH":
-      return pad(H);
-    case "H":
-      return String(H);
-    case "hh":
-      return pad(h);
-    case "h":
-      return String(h);
-    case "mm":
-      return pad(m);
-    case "m":
-      return String(m);
-    case "ss":
-      return pad(s);
-    case "s":
-      return String(s);
-    case "A":
-      return A;
-    case "a":
-      return A.toLowerCase();
-    default:
-      return token;
-  }
-}
-
-function formatDate(date: Date, format: string): string {
-  const tokenPattern = /YYYY|YY|MMMM|MMM|MM|M|DD|D|HH|H|hh|h|mm|m|ss|s|A|a/g;
-  let result = "";
-  let lastIndex = 0;
-  let match = tokenPattern.exec(format);
-
-  while (match !== null) {
-    result += format.slice(lastIndex, match.index);
-    result += formatDateToken(date, match[0]);
-    lastIndex = tokenPattern.lastIndex;
-    match = tokenPattern.exec(format);
-  }
-  result += format.slice(lastIndex);
-  return result;
-}
-
-registerMethodFunction("date", "format", (target, [format]) => {
+registerMethodFunction("date", "format", (target, [format], context) => {
   if (!isDateValue(target)) return undefined;
-  const timestamp = target.getTime();
-  if (Number.isNaN(timestamp)) return "";
-  if (typeof format === "string" && format) {
-    return formatDate(target, format);
-  }
-  return target.toISOString();
+  if (Number.isNaN(target.getTime())) return "";
+  const pattern = typeof format === "string" && format ? format : "YYYY-MM-DDTHH:mm:ssZ";
+  return formatMoment(target, pattern, context.locale);
 });
 
 registerMethodFunction("date", "year", (target) =>
@@ -704,10 +566,10 @@ registerMethodFunction("date", "day", (target) =>
   isDateValue(target) ? target.getDate() : undefined,
 );
 
+// the date without its time, as a date value
 registerMethodFunction("date", "date", (target) => {
   if (!isDateValue(target)) return undefined;
-  const pad = (n: number, len = 2) => String(n).padStart(len, "0");
-  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`;
+  return new BasesDate(new Date(target.getFullYear(), target.getMonth(), target.getDate()), false);
 });
 
 registerMethodFunction("date", "time", (target) => {
@@ -716,21 +578,14 @@ registerMethodFunction("date", "time", (target) => {
   return `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
 });
 
-registerMethodFunction("date", "relative", (target) => {
+// moment's fromNow(): "3 years ago", "in 2 days", in the site's locale
+registerMethodFunction("date", "relative", (target, _args, context) => {
   if (!isDateValue(target)) return undefined;
-  const time = target.getTime();
-  if (Number.isNaN(time)) return "";
-  const diff = time - Date.now();
-  const abs = Math.abs(diff);
-  const minutes = Math.round(abs / 60_000);
-  const hours = Math.round(abs / 3_600_000);
-  const days = Math.round(abs / 86_400_000);
-
-  if (days >= 1) return diff < 0 ? `${days}d ago` : `in ${days}d`;
-  if (hours >= 1) return diff < 0 ? `${hours}h ago` : `in ${hours}h`;
-  if (minutes >= 1) return diff < 0 ? `${minutes}m ago` : `in ${minutes}m`;
-  return diff < 0 ? "just now" : "soon";
+  if (Number.isNaN(target.getTime())) return "";
+  return relativeFromNow(target, context.locale);
 });
+
+registerMethodFunction("duration", "isEmpty", () => false);
 
 registerMethodFunction("date", "isEmpty", (target) => {
   if (!isDateValue(target)) return true;
@@ -779,21 +634,22 @@ registerMethodFunction("list", "round", (target, [digits]) => {
   });
 });
 
+// As in Obsidian, the link is to the file's full path, shown as written (`folder/Note.md`).
 registerMethodFunction("file", "asLink", (target, args) => {
   if (!isFileValue(target)) return "";
-  const path = target.path.replace(/\.md$/, "");
+  const path = target.path;
   const display = args.length > 0 ? toStringValue(args[0]) : "";
   return display ? `[[${path}|${display}]]` : `[[${path}]]`;
 });
 
 registerMethodFunction("string", "containsAll", (target, args) => {
-  const value = toStringValue(target);
-  return args.every((needle) => value.includes(toStringValue(needle)));
+  const value = toStringValue(target).toLowerCase();
+  return args.every((needle) => value.includes(toStringValue(needle).toLowerCase()));
 });
 
 registerMethodFunction("string", "containsAny", (target, args) => {
-  const value = toStringValue(target);
-  return args.some((needle) => value.includes(toStringValue(needle)));
+  const value = toStringValue(target).toLowerCase();
+  return args.some((needle) => value.includes(toStringValue(needle).toLowerCase()));
 });
 
 registerMethodFunction("string", "split", (target, [separator]) => {
@@ -820,14 +676,14 @@ registerMethodFunction("list", "contains", (target, [needle], context) => {
   return listContains(target, needle, context);
 });
 
-registerMethodFunction("list", "containsAll", (target, args) => {
+registerMethodFunction("list", "containsAll", (target, args, context) => {
   if (!Array.isArray(target)) return false;
-  return args.every((needle) => target.includes(needle));
+  return args.every((needle) => listContains(target, needle, context));
 });
 
-registerMethodFunction("list", "containsAny", (target, args) => {
+registerMethodFunction("list", "containsAny", (target, args, context) => {
   if (!Array.isArray(target)) return false;
-  return args.some((needle) => target.includes(needle));
+  return args.some((needle) => listContains(target, needle, context));
 });
 
 registerMethodFunction("list", "flat", (target) => {
@@ -893,7 +749,15 @@ registerMethodFunction("object", "values", (target) => {
 });
 
 function registerAnyMethod(name: string, fn: MethodFunction): void {
-  const targets: MethodTarget[] = ["string", "number", "date", "list", "file", "object"];
+  const targets: MethodTarget[] = [
+    "string",
+    "number",
+    "date",
+    "duration",
+    "list",
+    "file",
+    "object",
+  ];
   for (const target of targets) {
     registerMethodFunction(target, name, fn);
   }
@@ -903,6 +767,9 @@ registerAnyMethod("isTruthy", (target) => Boolean(target));
 
 registerAnyMethod("isType", (target, [typeName]) => {
   const expected = toStringValue(typeName).toLowerCase();
+  if (isDuration(target)) return expected === "duration";
+  if (isTagValue(target)) return expected === "string";
+  if (isUrlValue(target)) return expected === "url";
   if (typeof target === "string") return expected === "string";
   if (typeof target === "number") return expected === "number";
   if (isDateValue(target)) return expected === "date";
@@ -913,7 +780,8 @@ registerAnyMethod("isType", (target, [typeName]) => {
 });
 
 registerAnyMethod("toString", (target) => {
-  if (isDateValue(target)) return target.toISOString();
+  if (isDateValue(target)) return dateToString(target);
+  if (isDuration(target)) return target.toString();
   if (Array.isArray(target)) return target.map((item) => toStringValue(item)).join(", ");
   if (isRecord(target)) return JSON.stringify(target);
   return toStringValue(target);

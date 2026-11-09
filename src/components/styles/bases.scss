@@ -216,69 +216,92 @@ th.is-sorted-desc .bases-table-header-sort {
 
 .bases-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: 12px;
 }
 
+// A card is a box, not a link: its file-name link is stretched over the whole card (::after),
+// and links inside properties sit above that, so each stays its own link (bases-page#10).
 .bases-card {
+  position: relative;
   border: 1px solid var(--lightgray);
-  border-radius: 12px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--light);
   display: flex;
   flex-direction: column;
+  min-width: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  color: inherit;
-  text-decoration: none;
   transition: box-shadow 0.15s ease;
 
   &:hover {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
   }
-}
 
-.bases-card-image {
-  overflow: hidden;
-  background: var(--lightgray);
-
-  img {
-    width: 100%;
-    height: 100%;
-    display: block;
-    object-fit: cover;
+  a:not(.bases-card-link) {
+    position: relative;
+    z-index: 2;
   }
 }
 
-.bases-card-color {
-  min-height: 60px;
+a.bases-card-link {
+  background-color: transparent;
+  padding: 0;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+
+  &:focus-visible::after {
+    outline: 2px solid var(--secondary);
+    outline-offset: -2px;
+    border-radius: 8px;
+  }
+}
+
+// As in Obsidian, the cover is a background (height = card width × imageAspectRatio), so a
+// theme's img rules (margin, radius) can't move it.
+.bases-card-cover {
+  width: 100%;
+  background-color: var(--lightgray);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .bases-card-title {
   font-weight: 600;
   color: var(--dark);
+  overflow-wrap: anywhere;
 }
 
 .bases-card-body {
-  padding: 12px;
+  padding: 8px 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.bases-card-meta {
-  display: grid;
   gap: 4px;
+  min-width: 0;
+
+  &:empty {
+    display: none;
+  }
 }
 
 .bases-card-row {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   font-size: 0.8rem;
   color: var(--darkgray);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .bases-card-label {
   color: var(--gray);
+  font-size: 0.7rem;
 }
 
 .bases-map-placeholder {
@@ -329,6 +352,10 @@ th.is-sorted-desc .bases-table-header-sort {
   height: 100%;
   display: block;
   object-fit: cover;
+  // Don't inherit a host theme's global `img { margin }` / `border-radius`;
+  // the fixed-ratio, overflow:hidden box would shift + clip the image.
+  margin: 0;
+  border-radius: 0;
 }
 
 .bases-gallery-placeholder {
@@ -424,4 +451,18 @@ th.is-sorted-desc .bases-table-header-sort {
 
 .bases-board-card-label {
   color: var(--gray);
+}
+
+// A formula that failed shows its error, as in Obsidian.
+.bases-formula-error {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  color: var(--secondary);
+  font-size: 0.9em;
+}
+
+.bases-formula-error-icon::before {
+  content: "⚠";
+  color: #e5a50a;
 }

@@ -27,6 +27,7 @@ const BoardView: ViewRenderer = ({
   slug,
   allSlugs,
   linkResolution,
+  tagPages,
 }) => {
   const localeStrings = i18n(locale).components.bases;
   const groupProperty = view.groupBy?.property ?? view.boardProperty;
@@ -68,7 +69,7 @@ const BoardView: ViewRenderer = ({
             </div>
             <div class="bases-board-column-body">
               {group.entries.map((entry) => {
-                const ctx = { slug, allSlugs, linkResolution };
+                const ctx = { slug, allSlugs, linkResolution, locale, tagPages };
                 return (
                   <div class="bases-board-card">
                     <a
@@ -89,7 +90,7 @@ const BoardView: ViewRenderer = ({
                                 {getColumnLabel(column, basesData)}
                               </span>
                               <span class="bases-board-card-value">
-                                {renderCellValue(value, ctx)}
+                                {renderCellValue(value, ctx, column)}
                               </span>
                             </div>
                           );

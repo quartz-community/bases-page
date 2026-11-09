@@ -1,6 +1,9 @@
 import type { BasesData, BasesEntry, BasesView, QuartzPluginData, SortEntry } from "./types";
-import { evaluate, evaluateFilter, resolvePropertyValue } from "./compiler";
+import { evaluate, evaluateFilter, isDuration, resolvePropertyValue } from "./compiler";
 import type { EvalContext } from "./compiler";
+import { TagValue } from "./compiler/values";
+import { withHash } from "./tags";
+import type { NoteTags } from "./tags";
 
 function normalizeStringArray(values: unknown): string[] {
   if (!Array.isArray(values)) return [];
@@ -37,6 +40,15 @@ function getBaseName(path: string): string {
   return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
+/**
+ * `file.name` as Obsidian's Bases gives it: a Markdown note's name has no extension
+ * (`Note`, `Drawing.excalidraw`), every other file keeps it (`Plan.canvas`, `X.base`).
+ * `file.basename` never has the extension, `file.fullname` always does.
+ */
+export function fileNameFor(fullname: string, basename: string, ext: string): string {
+  return ext === "md" ? basename : fullname;
+}
+
 function toDate(value: unknown): Date | undefined {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   if (typeof value === "string") {
@@ -54,13 +66,14 @@ function buildFileProperties(
   const filePath = getFilePath(fileData, slug);
   const baseName = filePath ? getBaseName(filePath) : getBaseName(slug);
   const basename = baseName || slug.split("/").pop() || "Untitled";
-  // as in Obsidian: file.name has the extension (`Plan.canvas`, `Note.md`), file.basename doesn't
-  const name = (filePath ? getFileName(filePath) : "") || basename;
+  const fullname = (filePath ? getFileName(filePath) : "") || basename;
   const lastSlash = filePath.lastIndexOf("/");
-  const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
-  const lastDot = filePath.lastIndexOf(".");
-  const ext = lastDot >= 0 ? filePath.slice(lastDot + 1) : "";
-  const tags = normalizeStringArray(frontmatter.tags);
+  // as in Obsidian, the root folder is "/"
+  const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "/";
+  const lastDot = fullname.lastIndexOf(".");
+  const ext = lastDot > 0 ? fullname.slice(lastDot + 1) : "";
+  const name = fileNameFor(fullname, basename, ext);
+  const tags = noteTags(fileData)?.file ?? normalizeStringArray(frontmatter.tags).map(withHash);
   const links = normalizeStringArray(fileData.links ?? fileData.outgoingLinks);
   const embeds = normalizeStringArray(fileData.embeds);
 
@@ -71,6 +84,7 @@ function buildFileProperties(
   return {
     name,
     basename,
+    fullname,
     path: filePath,
     folder,
     ext,
@@ -84,6 +98,55 @@ function buildFileProperties(
   };
 }
 
+function noteTags(fileData: QuartzPluginData): NoteTags | undefined {
+  const tags = (fileData as { basesTags?: unknown }).basesTags;
+  if (!tags || typeof tags !== "object" || !Array.isArray((tags as NoteTags).file))
+    return undefined;
+  return tags as NoteTags;
+}
+
+/**
+ * A note's properties as Obsidian's Bases reads them: `tags` holds the frontmatter tags as
+ * written (with `#`), not Quartz's slugged list with the inline tags merged in.
+ */
+export function noteProperties(fileData: QuartzPluginData): Record<string, unknown> {
+  const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
+  const tags = noteTags(fileData);
+  if (!tags) return frontmatter;
+  const properties: Record<string, unknown> = { ...frontmatter };
+  if (tags.note) properties.tags = tags.note;
+  else delete properties.tags;
+  return properties;
+}
+
+/** The file and note values formulas see: tags are tag values (nested-tag aware). */
+export function evalFile(
+  fileProperties: BasesEntry["fileProperties"],
+  properties: Record<string, unknown>,
+): EvalContext["file"] {
+  return {
+    ...fileProperties,
+    tags: fileProperties.tags.map((tag) => new TagValue(tag)) as unknown as string[],
+    properties: evalNote(properties),
+  };
+}
+
+export function evalNote(properties: Record<string, unknown>): Record<string, unknown> {
+  const tags = properties.tags;
+  if (!Array.isArray(tags) && typeof tags !== "string") return properties;
+  const list = Array.isArray(tags) ? tags : [tags];
+  return {
+    ...properties,
+    tags: list.map((tag) => (typeof tag === "string" ? new TagValue(withHash(tag)) : tag)),
+  };
+}
+
+/** `this` for a file value: its properties as `this.<key>`, then `this.file` and `this.note`. */
+export function selfContextFor(file: EvalContext["file"]): NonNullable<EvalContext["self"]> {
+  const note = file.properties ?? {};
+  return { ...note, file, note };
+}
+
 /**
  * The `this` context for a base rendered inside a note: `this.file` is the
  * embedding note's full file value (as `file` is for each entry), so methods
@@ -92,7 +155,8 @@ function buildFileProperties(
 export function buildSelfContext(fileData: QuartzPluginData): NonNullable<EvalContext["self"]> {
   const slug = typeof fileData.slug === "string" ? fileData.slug : "";
   const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
-  return { file: { ...buildFileProperties(fileData, slug, frontmatter), properties: frontmatter } };
+  const properties = noteProperties(fileData);
+  return selfContextFor(evalFile(buildFileProperties(fileData, slug, frontmatter), properties));
 }
 
 function compareSort(a: unknown, b: unknown): number {
@@ -100,6 +164,8 @@ function compareSort(a: unknown, b: unknown): number {
   if (a === undefined || a === null) return 1;
   if (b === undefined || b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+  if (isDuration(a) && isDuration(b)) return a.totalMilliseconds() - b.totalMilliseconds();
   const dateA = typeof a === "string" ? Date.parse(a) : NaN;
   const dateB = typeof b === "string" ? Date.parse(b) : NaN;
   if (!Number.isNaN(dateA) && !Number.isNaN(dateB)) return dateA - dateB;
@@ -146,6 +212,7 @@ export function resolveBasesEntries(
   allFiles: QuartzPluginData[],
   view?: BasesView,
   selfContext?: EvalContext["self"],
+  locale?: string,
 ): { entries: BasesEntry[]; total: number } {
   const entries: BasesEntry[] = [];
   const formulas = basesData.formulas ?? {};
@@ -159,7 +226,7 @@ export function resolveBasesEntries(
     const fdPath = getFilePath(fd, fdSlug);
     const fm = (fd.frontmatter ?? {}) as Record<string, unknown>;
     const fp = buildFileProperties(fd, fdSlug, fm);
-    const fileValue: EvalContext["file"] = { ...fp, properties: fm };
+    const fileValue: EvalContext["file"] = evalFile(fp, noteProperties(fd));
 
     fileLookup.set(fdPath, fileValue);
     const withoutExt = fdPath.replace(/\.md$/, "");
@@ -182,16 +249,18 @@ export function resolveBasesEntries(
     const slug = typeof fileData.slug === "string" ? fileData.slug : "";
     if (!slug) continue;
 
-    const filePath = typeof fileData.filePath === "string" ? fileData.filePath : "";
-    if (filePath.endsWith(".base") || slug.endsWith(".base")) continue;
+    // As in Obsidian, .base files are files too: an unfiltered base lists them.
 
     const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
     const fileProperties = buildFileProperties(fileData, slug, frontmatter);
+    const properties = noteProperties(fileData);
+    const file = evalFile(fileProperties, properties);
     const context = {
-      note: frontmatter,
-      file: { ...fileProperties, properties: frontmatter },
+      note: file.properties ?? properties,
+      file,
       formula: {} as Record<string, unknown>,
       self: selfContext,
+      locale,
       _fileLookup: fileLookup,
     };
 
@@ -213,7 +282,7 @@ export function resolveBasesEntries(
     entries.push({
       slug,
       title,
-      properties: frontmatter,
+      properties,
       fileProperties,
       formulaValues: context.formula,
     });

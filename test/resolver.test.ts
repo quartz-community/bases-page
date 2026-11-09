@@ -84,7 +84,7 @@ describe("resolveBasesEntries", () => {
     expect(result.total).toBe(2);
   });
 
-  it("excludes .base files", () => {
+  it("lists .base files, as Obsidian does", () => {
     const basesData: BasesData = {};
     const files = [
       ...baseFiles,
@@ -95,8 +95,10 @@ describe("resolveBasesEntries", () => {
       }),
     ];
     const result = resolveBasesEntries(basesData, files);
-    expect(result.entries).toHaveLength(2);
-    expect(result.entries.find((entry) => entry.slug.endsWith(".base"))).toBeUndefined();
+    expect(result.entries).toHaveLength(3);
+    expect(
+      result.entries.find((entry) => entry.slug.endsWith(".base"))?.fileProperties,
+    ).toMatchObject({ name: "excluded.base", basename: "excluded", ext: "base" });
   });
 
   it("applies global filters", () => {
@@ -279,12 +281,13 @@ describe("resolveBasesEntries", () => {
     const result = resolveBasesEntries(basesData, baseFiles);
     const alpha = result.entries.find((entry) => entry.slug === "notes/alpha");
     expect(alpha?.fileProperties).toEqual({
-      name: "alpha.md",
+      name: "alpha",
       basename: "alpha",
+      fullname: "alpha.md",
       path: "notes/alpha.md",
       folder: "notes",
       ext: "md",
-      tags: ["work", "important"],
+      tags: ["#work", "#important"],
       links: ["beta"],
       embeds: [],
       created: "2024-01-01T00:00:00.000Z",
@@ -294,12 +297,24 @@ describe("resolveBasesEntries", () => {
     });
   });
 
-  it("file.name keeps the extension and file.basename drops it, as in Obsidian", () => {
+  it("file.name of a Markdown note has no extension, as in Obsidian (file.fullname has it)", () => {
     const basesData: BasesData = {};
     const result = resolveBasesEntries(basesData, baseFiles);
     const alpha = result.entries.find((entry) => entry.slug === "notes/alpha");
-    expect(alpha?.fileProperties.name).toBe("alpha.md");
+    expect(alpha?.fileProperties.name).toBe("alpha");
     expect(alpha?.fileProperties.basename).toBe("alpha");
+    expect(alpha?.fileProperties.fullname).toBe("alpha.md");
+  });
+
+  it('file.name == "Note" matches the Markdown note Note.md, not "Note.md"', () => {
+    const files: QuartzPluginData[] = [
+      makeFile({ slug: "boards/plan", filePath: "boards/Plan.canvas" }),
+      makeFile({ slug: "boards/note", filePath: "boards/Note.md" }),
+    ];
+    expect(
+      resolveBasesEntries({ filters: 'file.name == "Note"' }, files).entries.map((e) => e.slug),
+    ).toEqual(["boards/note"]);
+    expect(resolveBasesEntries({ filters: 'file.name == "Note.md"' }, files).entries).toEqual([]);
   });
 
   it("filters on file.name with its extension", () => {
@@ -459,8 +474,8 @@ describe("resolveBasesEntries", () => {
     expect(halfelf?.slug).toBe("Compendium/Species/halfelf");
     const inheritances = halfelf?.formulaValues.Inheritances as Record<string, unknown>[];
     expect(inheritances).toHaveLength(1);
-    expect(inheritances[0]?.name).toBe("elf.md");
-    expect(inheritances[0]?.tags).toEqual(["lineage"]);
+    expect(inheritances[0]?.name).toBe("elf");
+    expect((inheritances[0]?.tags as unknown[]).map(String)).toEqual(["#lineage"]);
   });
 
   it("resolves string.asFile() without .md extension in embeds", () => {
@@ -487,7 +502,7 @@ describe("resolveBasesEntries", () => {
     expect(result.entries).toHaveLength(1);
     const refs = result.entries[0]?.formulaValues.refs as Record<string, unknown>[];
     expect(refs).toHaveLength(1);
-    expect(refs[0]?.name).toBe("guide.md");
+    expect(refs[0]?.name).toBe("guide");
   });
 
   it("resolves short basename embeds from OFM wikilinks", () => {
@@ -528,7 +543,9 @@ describe("resolveBasesEntries", () => {
     const inheritances = dryad?.formulaValues.Inheritances as Record<string, unknown>[];
     expect(inheritances).toHaveLength(3);
     expect(inheritances.map((f) => f.basename)).toEqual(["Apple", "Cherry", "Oak"]);
-    expect(inheritances.every((f) => (f.tags as string[]).includes("lineage"))).toBe(true);
+    expect(inheritances.every((f) => (f.tags as unknown[]).map(String).includes("#lineage"))).toBe(
+      true,
+    );
   });
 
   it("resolves short basename embeds with non-matching tags filtered out", () => {
@@ -705,7 +722,7 @@ describe("this context of a base embedded in a note", () => {
   it("exposes the embedding note as a full file value", () => {
     const self = buildSelfContext(people[2]!);
     expect(self.file).toMatchObject({
-      name: "Solo.md",
+      name: "Solo",
       basename: "Solo",
       path: "guides/Solo.md",
       folder: "guides",
@@ -775,10 +792,11 @@ describe("this context of a base embedded in a note", () => {
     expect(
       result.entries.map(({ fileProperties: f }) => [f.name, f.path, f.ext, f.folder]),
     ).toEqual([
-      ["note.md", "boards/note.md", "md", "boards"],
+      ["note", "boards/note.md", "md", "boards"],
       ["Plan.canvas", "boards/Plan.canvas", "canvas", "boards"],
       ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
-      ["Sketch.excalidraw.md", "boards/Sketch.excalidraw.md", "md", "boards"],
+      ["Sketch.excalidraw", "boards/Sketch.excalidraw.md", "md", "boards"],
+      ["Board.base", "boards/Board.base", "base", "boards"],
     ]);
 
     const canvases = resolveBasesEntries({ filters: 'file.ext == "canvas"' }, files);

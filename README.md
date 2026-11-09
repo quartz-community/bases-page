@@ -33,7 +33,6 @@ For advanced use cases (e.g. custom view renderers), you can override in TypeScr
 import * as ExternalPlugin from "./.quartz/plugins";
 
 ExternalPlugin.BasesPage({
-  defaultViewType: "table",
   linkResolution: "shortest",
   customViews: {
     myView: ({
@@ -92,7 +91,9 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 ### Property Access
 
 - `note.property`: Access a property on the current note.
-- `file.name`: The name of the file.
+- `file.name`: The name of the file, as in Obsidian: without the extension for Markdown notes (`Note`), with it for other files (`Plan.canvas`).
+- `file.basename`: The name without the extension.
+- `file.fullname`: The name with the extension (`Note.md`).
 - `file.path`: The full path of the file.
 - `file.folder`: The folder containing the file.
 - `file.ext`: The file extension.
@@ -304,11 +305,11 @@ interface EvalContext {
 
 ## Configuration Options
 
-| Option            | Type                                     | Default      | Description                                                                                    |
-| :---------------- | :--------------------------------------- | :----------- | :--------------------------------------------------------------------------------------------- |
-| `defaultViewType` | `string`                                 | `"table"`    | The default view type used when none is specified in the .base file.                           |
-| `linkResolution`  | `"absolute" \| "relative" \| "shortest"` | `"shortest"` | How to resolve internal links in view renderers. Should match your crawl-links plugin setting. |
-| `customViews`     | `Record<string, ViewRenderer>`           | `{}`         | Custom view renderers provided via TypeScript override.                                        |
+| Option            | Type                                     | Default      | Description                                                                                         |
+| :---------------- | :--------------------------------------- | :----------- | :-------------------------------------------------------------------------------------------------- |
+| `defaultViewType` | `string`                                 | unset        | Open bases on their first view of this type. Unset, a base opens on its first view, as in Obsidian. |
+| `linkResolution`  | `"absolute" \| "relative" \| "shortest"` | `"shortest"` | How to resolve internal links in view renderers. Should match your crawl-links plugin setting.      |
+| `customViews`     | `Record<string, ViewRenderer>`           | `{}`         | Custom view renderers provided via TypeScript override.                                             |
 
 ## License
 

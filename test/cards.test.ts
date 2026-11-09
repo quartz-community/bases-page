@@ -115,3 +115,63 @@ describe("resolveImageSrc", () => {
     });
   });
 });
+
+describe("cards view (bases-page#3, #10)", async () => {
+  const { render } = await import("preact-render-to-string");
+  const { h } = await import("preact");
+  const { CardsView, coverAspectRatio } = await import("../src/components/views/cards");
+  const entry = (slug: string, properties: Record<string, unknown>) => ({
+    slug,
+    title: slug,
+    properties,
+    fileProperties: {
+      name: slug,
+      basename: slug,
+      path: `${slug}.md`,
+      folder: "",
+      ext: "md",
+      tags: [],
+      links: [],
+    },
+    formulaValues: {},
+  });
+  const renderCards = (view: Record<string, unknown>) =>
+    render(
+      h(CardsView as never, {
+        entries: [
+          entry("c-land", { cover: "#ff8800", related: "[[c-sq]]" }),
+          entry("c-none", { related: "[[c-sq]]" }),
+        ],
+        view: { type: "cards", ...view },
+        basesData: {},
+        total: 2,
+        locale: "en-US",
+        slug: "index",
+        allSlugs: ["c-land", "c-none", "c-sq"],
+        linkResolution: "shortest",
+      }),
+    );
+
+  it("imageAspectRatio is height / width, default 1", () => {
+    expect(coverAspectRatio({ imageAspectRatio: 0.5 })).toBe(0.5);
+    expect(coverAspectRatio({})).toBe(1);
+    const html = renderCards({ image: "note.cover", imageAspectRatio: 0.5, order: ["file.name"] });
+    expect(html).toContain("aspect-ratio:1 / 0.5");
+  });
+
+  it("a card is not a link around other links", () => {
+    const html = renderCards({ image: "note.cover", order: ["file.name", "note.related"] });
+    expect(html).not.toMatch(/<a [^>]*class="[^"]*bases-card"/);
+    expect(html.match(/class="bases-card"/g)).toHaveLength(2);
+    // a cover for every card when the view has an image, empty without one
+    expect(html.match(/bases-card-cover/g)).toHaveLength(2);
+    expect(html).toContain("bases-card-cover is-empty");
+    expect(html).toContain("background-color:#ff8800");
+  });
+
+  it("order: [] shows the cover alone, with a link over the card", () => {
+    const html = renderCards({ image: "note.cover", order: [] });
+    expect(html).not.toContain("bases-card-title");
+    expect(html).toContain('aria-label="c-land"');
+  });
+});

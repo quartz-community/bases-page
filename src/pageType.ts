@@ -25,6 +25,28 @@ import { registerBuiltinViews } from "./components/views";
 import { registerCustomViews, viewRegistry } from "./registry";
 import { i18n } from "./i18n";
 import { ViewSelector } from "./components/ViewSelector";
+import { escapeHtml, findEmbeddedView, initialViewIndex } from "./views";
+import { siteHasTagPages } from "./tagPages";
+
+/**
+ * What a .base page links to: the notes its views show, each view with its own filters (from
+ * community PR #7). Resolving without a view applied only the top-level filters, so a base
+ * whose filters sit on its views linked to every note, and showed up in every note's backlinks.
+ */
+export function linkedSlugs(
+  basesData: BasesData,
+  allFileData: Record<string, unknown>[],
+  selfContext?: EvalContext["self"],
+): SimpleSlug[] {
+  const slugs = new Set<SimpleSlug>();
+  const views = basesData.views && basesData.views.length > 0 ? basesData.views : [undefined];
+  for (const view of views) {
+    for (const entry of resolveBasesEntries(basesData, allFileData, view, selfContext).entries) {
+      slugs.add(entry.slug as SimpleSlug);
+    }
+  }
+  return [...slugs];
+}
 
 const basesMatcher: PageMatcher = ({ fileData }) => {
   return "basesData" in fileData;
@@ -57,13 +79,16 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
       const baseName = fileWithoutExt.split("/").pop() ?? "Base";
 
       const lastSlash = filePath.lastIndexOf("/");
-      const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
+      const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "/";
       const dotIndex = filePath.lastIndexOf(".");
       const ext = dotIndex >= 0 ? filePath.slice(dotIndex + 1) : "";
+      // opened directly, `this` is the .base file itself, without properties
       const basesSelfContext = {
+        note: {},
         file: {
           name: filePath.split("/").pop() ?? baseName,
           basename: baseName,
+          fullname: filePath.split("/").pop() ?? baseName,
           path: filePath,
           folder,
           ext,
@@ -82,12 +107,7 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
           filePath: joinSegments(ctx.argv.directory, filePath) as FilePath,
           relativePath: filePath as unknown as FilePath,
           frontmatter: { title: baseName, tags: [] },
-          links: resolveBasesEntries(
-            basesData,
-            allFileData,
-            undefined,
-            basesSelfContext,
-          ).entries.map((e) => e.slug as SimpleSlug),
+          links: linkedSlugs(basesData, allFileData, basesSelfContext),
           basesData,
           basesOptions: opts,
           basesSelfContext,
@@ -144,6 +164,7 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
       if (!basesData) return;
 
       const viewName = node.properties?.["dataQzBasesView"] as string | undefined;
+      const viewNameExact = node.properties?.["dataQzBasesViewExact"] !== undefined;
 
       const selfContext = buildSelfContext(componentData.fileData);
 
@@ -162,6 +183,8 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
         linkResolution,
         viewName,
         selfContext,
+        viewNameExact,
+        siteHasTagPages(componentData.ctx),
       );
       const fragment = fromHtml(htmlString, { fragment: true }) as HtmlRoot;
 
@@ -188,27 +211,25 @@ function renderBasesInline(
   linkResolution: "absolute" | "relative" | "shortest",
   viewName?: string,
   selfContext?: EvalContext["self"],
+  viewNameExact = false,
+  tagPages?: boolean,
 ): string {
   let views = basesData.views ?? [];
 
   if (viewName) {
-    const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, "-");
-    const viewNameNorm = normalize(viewName);
-    views = views.filter((v) => v.name !== undefined && normalize(v.name) === viewNameNorm);
-    if (views.length === 0) {
-      return `<div class="bases-empty">View &quot;${viewName}&quot; not found</div>`;
+    const view = findEmbeddedView(views, viewName, viewNameExact);
+    if (!view) {
+      // Obsidian's message
+      return `<div class="bases-empty">View &quot;${escapeHtml(viewName)}&quot; not found</div>`;
     }
+    views = [view];
   }
 
   if (views.length === 0) {
     return `<div class="bases-empty">${localeStrings.noViews}</div>`;
   }
 
-  const preferredType = opts?.defaultViewType ?? "table";
-  const initialIndex = Math.max(
-    0,
-    views.findIndex((view) => view.type === preferredType),
-  );
+  const initialIndex = initialViewIndex(views, opts?.defaultViewType);
 
   // Collect CSS from custom view registrations (deduplicated by type)
   const activeTypes = new Set(views.map((v) => v.type));
@@ -225,7 +246,7 @@ function renderBasesInline(
 
   // Render each view panel
   const viewPanels = views.map((view, index) => {
-    const { entries, total } = resolveBasesEntries(basesData, allFiles, view, selfContext);
+    const { entries, total } = resolveBasesEntries(basesData, allFiles, view, selfContext, locale);
     const registration = viewRegistry.get(view.type);
     const Renderer = registration?.render;
     const activeClass = index === initialIndex ? " is-active" : "";
@@ -248,6 +269,7 @@ function renderBasesInline(
             allSlugs,
             linkResolution,
             options: registration?.options,
+            tagPages,
           }),
         ),
       );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evaluate } from "../src/compiler";
+import { evaluate, UrlValue } from "../src/compiler";
 import type { EvalContext } from "../src/compiler";
 
 const eventDate = new Date(2024, 0, 15, 12, 0, 0);
@@ -67,8 +67,9 @@ describe("string methods", () => {
   it("converts string to file value with asFile", () => {
     const result = evaluate('"notes/example.md".asFile()', context);
     expect(result).toEqual({
-      name: "example.md",
+      name: "example",
       basename: "example",
+      fullname: "example.md",
       path: "notes/example.md",
       folder: "notes",
       ext: "md",
@@ -77,13 +78,25 @@ describe("string methods", () => {
     });
   });
 
+  it("file.name of a file value: no extension for Markdown notes, kept for other files", () => {
+    expect(evaluate('file("notes/Plan.canvas").name', context)).toBe("Plan.canvas");
+    expect(evaluate('file("notes/Plan.canvas").basename', context)).toBe("Plan");
+    expect(evaluate('file("Drawing.excalidraw.md").name', context)).toBe("Drawing.excalidraw");
+    expect(evaluate('file("Drawing.excalidraw.md").fullname', context)).toBe(
+      "Drawing.excalidraw.md",
+    );
+    expect(evaluate('file("noext").name', context)).toBe("noext");
+    expect(evaluate('file("X.base").name', context)).toBe("X.base");
+  });
+
   it("handles asFile on filename without folder", () => {
     const result = evaluate('"readme.md".asFile()', context);
     expect(result).toEqual({
-      name: "readme.md",
+      name: "readme",
       basename: "readme",
+      fullname: "readme.md",
       path: "readme.md",
-      folder: "",
+      folder: "/",
       ext: "md",
       tags: [],
       links: [],
@@ -214,7 +227,7 @@ describe("string methods", () => {
       note: { ...context.note, location: "[[tavern]]" },
     };
     expect(evaluate("location.asFile().path == this.file.path", ctx)).toBe(true);
-    expect(evaluate("location.asFile().asLink()", ctx)).toBe("[[places/tavern]]");
+    expect(evaluate("location.asFile().asLink()", ctx)).toBe("[[places/tavern.md]]");
   });
 
   it.each([
@@ -262,7 +275,7 @@ describe("date functions", () => {
   });
 
   it("provides date.date() method", () => {
-    expect(evaluate("eventDate.date()", context)).toBe("2024-01-15");
+    expect(String(evaluate("eventDate.date()", context))).toBe("2024-01-15");
   });
 
   it("formats dates with tokens", () => {
@@ -281,15 +294,15 @@ describe("date functions", () => {
   });
 
   it("supports date arithmetic", () => {
-    const oneDay = 86_400_000;
-    const result = evaluate(`eventDate + ${oneDay}`, context);
+    const result = evaluate('eventDate + "1d"', context);
     expect(result).toBeInstanceOf(Date);
     expect((result as Date).getDate()).toBe(16);
   });
 
   it("supports date subtraction", () => {
     const result = evaluate('date("2024-01-15") - date("2024-01-10")', context);
-    expect(result).toBe(5 * 86_400_000);
+    expect(evaluate('(date("2024-01-15") - date("2024-01-10")).days', context)).toBe(5);
+    expect(String(result)).toBe("5 days");
   });
 
   it("compares dates", () => {
@@ -502,28 +515,28 @@ describe("list functions and methods", () => {
 });
 
 describe("duration and file helpers", () => {
-  it("parses durations with short units", () => {
-    expect(evaluate('duration("1h")', context)).toBe(3_600_000);
-    expect(evaluate('duration("30m")', context)).toBe(1_800_000);
-  });
-
-  it("parses durations with long-form units", () => {
-    expect(evaluate('duration("1 hour")', context)).toBe(3_600_000);
-    expect(evaluate('duration("2 hours")', context)).toBe(7_200_000);
-    expect(evaluate('duration("1 day")', context)).toBe(86_400_000);
-    expect(evaluate('duration("3 days")', context)).toBe(3 * 86_400_000);
-    expect(evaluate('duration("1 week")', context)).toBe(604_800_000);
-    expect(evaluate('duration("2 weeks")', context)).toBe(2 * 604_800_000);
-    expect(evaluate('duration("1 month")', context)).toBe(2_592_000_000);
-    expect(evaluate('duration("1 year")', context)).toBe(31_536_000_000);
-    expect(evaluate('duration("30 seconds")', context)).toBe(30_000);
-    expect(evaluate('duration("5 minutes")', context)).toBe(300_000);
+  it("parses durations with short and long-form units", () => {
+    const ms = (expression: string) =>
+      (evaluate(`duration("${expression}").milliseconds`, context) as number).toFixed(0);
+    expect(ms("1h")).toBe("3600000");
+    expect(ms("30m")).toBe("1800000");
+    expect(ms("1 hour")).toBe("3600000");
+    expect(ms("2 hours")).toBe("7200000");
+    expect(ms("1 day")).toBe("86400000");
+    expect(ms("3 days")).toBe(String(3 * 86_400_000));
+    expect(ms("1 week")).toBe("604800000");
+    expect(ms("2 weeks")).toBe(String(2 * 604_800_000));
+    expect(ms("30 seconds")).toBe("30000");
+    expect(ms("5 minutes")).toBe("300000");
+    expect(evaluate('duration("1 month").months', context)).toBe(1);
+    expect(evaluate('duration("1 year").years', context)).toBe(1);
   });
 
   it("builds file objects", () => {
     expect(evaluate('file("notes/test.md")', context)).toEqual({
-      name: "test.md",
+      name: "test",
       basename: "test",
+      fullname: "test.md",
       path: "notes/test.md",
       folder: "notes",
       ext: "md",
@@ -560,12 +573,12 @@ describe("duration and file helpers", () => {
   });
 
   it("supports file.asLink()", () => {
-    expect(evaluate("file.asLink()", context)).toBe("[[notes/test]]");
+    expect(evaluate("file.asLink()", context)).toBe("[[notes/test.md]]");
   });
 
   it("supports file.asLink() with display text", () => {
-    expect(evaluate('file.asLink("My Note")', context)).toBe("[[notes/test|My Note]]");
-    expect(evaluate('file.asLink("Custom")', context)).toBe("[[notes/test|Custom]]");
+    expect(evaluate('file.asLink("My Note")', context)).toBe("[[notes/test.md|My Note]]");
+    expect(evaluate('file.asLink("Custom")', context)).toBe("[[notes/test.md|Custom]]");
   });
 
   it("supports hasTag with nested tag matching", () => {
@@ -574,9 +587,10 @@ describe("duration and file helpers", () => {
     expect(evaluate('file.hasTag("missing")', context)).toBe(false);
   });
 
-  it("supports hasTag with variadic args", () => {
+  it("supports hasTag with variadic args: any of the tags, as in Obsidian", () => {
     expect(evaluate('file.hasTag("todo", "important")', context)).toBe(true);
-    expect(evaluate('file.hasTag("todo", "missing")', context)).toBe(false);
+    expect(evaluate('file.hasTag("todo", "missing")', context)).toBe(true);
+    expect(evaluate('file.hasTag("nope", "missing")', context)).toBe(false);
   });
 
   it("hasTag is case-insensitive", () => {
@@ -603,6 +617,30 @@ describe("link helpers", () => {
 
   it("extracts basename from file object used as display in link()", () => {
     expect(evaluate('link("other/page", file)', context)).toBe("[[other/page|test]]");
+  });
+
+  it("creates external links for external URLs in link()", () => {
+    expect(evaluate('link("https://example.com")', context)).toEqual(
+      new UrlValue("https://example.com"),
+    );
+    expect(evaluate('link("https://" + "example.com", "example.com")', context)).toEqual(
+      new UrlValue("https://example.com", "example.com"),
+    );
+    expect(evaluate('link("http://example.com/a", file)', context)).toEqual(
+      new UrlValue("http://example.com/a", "test"),
+    );
+  });
+
+  it("treats any URL scheme as external, as Obsidian does", () => {
+    expect(evaluate('link("mailto:a@example.com")', context)).toEqual(
+      new UrlValue("mailto:a@example.com"),
+    );
+    expect(evaluate('link("obsidian://open?vault=x")', context)).toEqual(
+      new UrlValue("obsidian://open?vault=x"),
+    );
+    expect(evaluate('link("note-a")', context)).toBe("[[note-a]]");
+    expect(evaluate('link("[[note-a]]", "Alias")', context)).toBe("[[note-a|Alias]]");
+    expect(evaluate('link("https://example.com").isType("link")', context)).toBe(false);
   });
 
   it("handles file object in both arguments of link()", () => {
@@ -694,7 +732,7 @@ describe("link-valued needles (this.file.asLink())", () => {
   });
 
   it("this.file.asLink() links to the embedding note", () => {
-    expect(evaluate("this.file.asLink()", ctx({}))).toBe("[[people/Alice]]");
+    expect(evaluate("this.file.asLink()", ctx({}))).toBe("[[people/Alice.md]]");
   });
 
   it("matches scalar and list link properties and resolved file links", () => {

@@ -35,6 +35,8 @@ export interface ViewRendererProps {
   linkResolution: "absolute" | "relative" | "shortest";
   /** Plugin-level options from the view type registration, if any. */
   options?: Record<string, unknown>;
+  /** Whether the site generates tag pages (tags then link to them) */
+  tagPages?: boolean;
 }
 
 /** View renderer function signature */
@@ -75,7 +77,10 @@ export interface ViewTypeRegistration {
 
 /** Plugin options for BasesPage */
 export interface BasesPageOptions {
-  /** Default view type when none specified. Default: "table" */
+  /**
+   * Opens a .base on its first view of this type. Unset (the default), it opens on its
+   * first view, as Obsidian does.
+   */
   defaultViewType?: string;
   /**
    * Custom view renderers passed via TS config override.
@@ -221,8 +226,12 @@ export interface BasesEntry {
   properties: Record<string, unknown>;
   /** File metadata properties */
   fileProperties: {
+    /** As in Obsidian: no extension for Markdown notes (`Note`), with it for other files (`Plan.canvas`) */
     name: string;
+    /** The name without the extension */
     basename: string;
+    /** The name with the extension */
+    fullname?: string;
     path: string;
     folder: string;
     ext: string;

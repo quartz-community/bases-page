@@ -26,6 +26,7 @@ const ListView: ViewRenderer = ({
   slug,
   allSlugs,
   linkResolution,
+  tagPages,
 }) => {
   const columns = getColumns(view, basesData, entries);
   const localeStrings = i18n(locale).components.bases;
@@ -42,7 +43,7 @@ const ListView: ViewRenderer = ({
       <div class="bases-list-group">
         <div class="bases-list-group-list">
           {entries.map((entry) => {
-            const ctx = { slug, allSlugs, linkResolution };
+            const ctx = { slug, allSlugs, linkResolution, locale, tagPages };
             const primaryColumn = columns[0] ?? "file.name";
             const secondaryColumns = columns.slice(1);
 
@@ -53,10 +54,10 @@ const ListView: ViewRenderer = ({
                   class="internal internal-link"
                   data-slug={entry.slug}
                 >
-                  {entry.title}
+                  {entry.fileProperties.name || entry.title}
                 </a>
               ) : (
-                renderCellValue(resolveEntryPropertyValue(primaryColumn, entry), ctx)
+                renderCellValue(resolveEntryPropertyValue(primaryColumn, entry), ctx, primaryColumn)
               );
 
             const secondaryItems: ComponentChild[] = [];
@@ -65,7 +66,7 @@ const ListView: ViewRenderer = ({
               if (isEmptyValue(value)) continue;
               secondaryItems.push(
                 <span class="bases-list-property">
-                  <span class="bases-rendered-value">{renderCellValue(value, ctx)}</span>
+                  <span class="bases-rendered-value">{renderCellValue(value, ctx, column)}</span>
                 </span>,
               );
             }
