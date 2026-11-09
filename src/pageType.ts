@@ -26,6 +26,7 @@ import { registerCustomViews, viewRegistry } from "./registry";
 import { i18n } from "./i18n";
 import { ViewSelector } from "./components/ViewSelector";
 import { escapeHtml, findEmbeddedView, initialViewIndex } from "./views";
+import { siteHasTagPages } from "./tagPages";
 
 /**
  * What a .base page links to: the notes its views show, each view with its own filters (from
@@ -181,6 +182,7 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
         viewName,
         selfContext,
         viewNameExact,
+        siteHasTagPages(componentData.ctx),
       );
       const fragment = fromHtml(htmlString, { fragment: true }) as HtmlRoot;
 
@@ -208,6 +210,7 @@ function renderBasesInline(
   viewName?: string,
   selfContext?: EvalContext["self"],
   viewNameExact = false,
+  tagPages?: boolean,
 ): string {
   let views = basesData.views ?? [];
 
@@ -264,6 +267,7 @@ function renderBasesInline(
             allSlugs,
             linkResolution,
             options: registration?.options,
+            tagPages,
           }),
         ),
       );

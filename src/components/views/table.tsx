@@ -48,9 +48,10 @@ function renderRow(
   allSlugs: string[],
   linkResolution: "absolute" | "relative" | "shortest",
   locale?: string,
+  tagPages?: boolean,
 ) {
   const transformOpts = { strategy: linkResolution, allSlugs: allSlugs as FullSlug[] };
-  const ctx = { slug, allSlugs, linkResolution, locale };
+  const ctx = { slug, allSlugs, linkResolution, locale, tagPages };
   return (
     <tr>
       {columns.map((column) => {
@@ -72,7 +73,7 @@ function renderRow(
                 {display || entry.title}
               </a>
             ) : (
-              renderCellValue(value, ctx)
+              renderCellValue(value, ctx, column)
             )}
           </td>
         );
@@ -90,6 +91,7 @@ const TableView: ViewRenderer = ({
   slug,
   allSlugs,
   linkResolution,
+  tagPages,
 }) => {
   const columns = getColumns(view, basesData, entries);
   const summaries = view.summaries ?? {};
@@ -138,12 +140,21 @@ const TableView: ViewRenderer = ({
                     </td>
                   </tr>
                   {groupEntries.map((entry) =>
-                    renderRow(entry, columns, view, slug, allSlugs, linkResolution, locale),
+                    renderRow(
+                      entry,
+                      columns,
+                      view,
+                      slug,
+                      allSlugs,
+                      linkResolution,
+                      locale,
+                      tagPages,
+                    ),
                   )}
                 </>
               ))
             : entries.map((entry) =>
-                renderRow(entry, columns, view, slug, allSlugs, linkResolution, locale),
+                renderRow(entry, columns, view, slug, allSlugs, linkResolution, locale, tagPages),
               )}
         </tbody>
         {hasSummary && (

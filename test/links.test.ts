@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render } from "preact-render-to-string";
 import { h, Fragment } from "preact";
-import { evaluate } from "../src/compiler";
+import { evaluate, TagValue } from "../src/compiler";
 import type { EvalContext } from "../src/compiler";
 import { renderCellValue } from "../src/components/shared/cell";
 
@@ -59,5 +59,43 @@ describe("link() and link values", () => {
   it("a Markdown link string stays text; a string that is a URL is a link", () => {
     expect(html("[x](https://example.com/md)")).not.toContain("<a");
     expect(html("https://example.com/prop")).toContain('href="https://example.com/prop"');
+  });
+});
+
+describe("tags in views (community PR #18)", () => {
+  const tagHtml = (value: unknown, column?: string, tagPages = true) =>
+    render(
+      h(
+        Fragment,
+        null,
+        renderCellValue(
+          value,
+          { slug: "notes/probe", allSlugs: [], linkResolution: "shortest", tagPages },
+          column,
+        ),
+      ),
+    );
+
+  it("tag columns render tag-page links, text without # in its own case", () => {
+    const out = tagHtml(["#Src/OSE/cc", "alpha"], "file.tags");
+    expect(out).toContain('<a href="../tags/src/ose/cc" class="internal tag-link"');
+    expect(out).toContain(">Src/OSE/cc</a>");
+    expect(out).toContain('href="../tags/alpha"');
+    expect(out).not.toContain("#");
+    expect(tagHtml("#x", "note.tags")).toContain(">x</a>");
+    expect(tagHtml(["#x"], "status")).toContain("#x");
+  });
+
+  it("a tag value from a formula renders as a tag", () => {
+    expect(tagHtml(new TagValue("#beta/gamma"))).toContain(
+      '<a href="../tags/beta/gamma" class="internal tag-link" data-slug="tags/beta/gamma">beta/gamma</a>',
+    );
+  });
+
+  it("without tag pages, or for an invalid tag, a tag is text", () => {
+    expect(tagHtml(["#x"], "tags", false)).toBe(
+      '<span class="bases-list"><span class="tag-link">x</span></span>',
+    );
+    expect(tagHtml(["#a, b"], "tags")).not.toContain("<a");
   });
 });

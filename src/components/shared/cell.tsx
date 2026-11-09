@@ -2,8 +2,8 @@ import type { ComponentChild } from "preact";
 import type { FullSlug } from "@quartz-community/types";
 
 import type { BasesData, BasesEntry, BasesView } from "../../types";
-import { renderExternalLink, renderTextWithLinks } from "./links";
-import { transformLink, slugifyPath } from "@quartz-community/utils";
+import { isResolvedLink, renderExternalLink, renderTextWithLinks } from "./links";
+import { transformLink, slugifyPath, slugTag } from "@quartz-community/utils";
 import {
   Duration,
   ErrorValue,
@@ -20,6 +20,8 @@ type RenderCtx = {
   linkResolution: "absolute" | "relative" | "shortest";
   /** The site's locale, for dates and durations */
   locale?: string;
+  /** Whether the site has tag pages; unset, a tag links when its page is in allSlugs */
+  tagPages?: boolean;
 };
 
 /**
@@ -51,9 +53,55 @@ export function formatValue(value: unknown): string {
   return String(value);
 }
 
-export function renderCellValue(rawValue: unknown, ctx: RenderCtx): ComponentChild {
+const TAG_PROPERTIES = new Set(["tags", "note.tags", "file.tags"]);
+
+/** `tags`, `note.tags` and `file.tags` hold tags (community PR #18). */
+export function isTagProperty(column: string | undefined): boolean {
+  return column !== undefined && TAG_PROPERTIES.has(column);
+}
+
+function asTags(value: unknown): unknown {
+  const toTag = (item: unknown) =>
+    typeof item === "string" && item.trim()
+      ? new TagValue(item.trim().startsWith("#") ? item.trim() : `#${item.trim()}`)
+      : item;
+  if (Array.isArray(value)) return value.map(toTag);
+  return toTag(value);
+}
+
+/**
+ * A tag shows as a link to its tag page, without `#` and in its own case: the static
+ * equivalent of Obsidian's tag pill, which opens a search for the tag.
+ */
+export function renderTag(tag: TagValue, ctx: RenderCtx): ComponentChild {
+  const target = `tags/${slugTag(tag.name)}`;
+  const href = transformLink(ctx.slug as FullSlug, target, {
+    strategy: "absolute",
+    allSlugs: ctx.allSlugs as FullSlug[],
+  });
+  // a value that isn't a valid tag (`a, b`) has no tag page
+  const valid = /^[\p{L}\p{N}\p{M}_\-/]+$/u.test(tag.name);
+  if (
+    !valid ||
+    ctx.tagPages === false ||
+    (ctx.tagPages === undefined && !isResolvedLink(href, ctx))
+  ) {
+    return <span class="tag-link">{tag.name}</span>;
+  }
+  return (
+    <a href={href} class="internal tag-link" data-slug={target}>
+      {tag.name}
+    </a>
+  );
+}
+
+export function renderCellValue(
+  rawValue: unknown,
+  ctx: RenderCtx,
+  column?: string,
+): ComponentChild {
   // a property holding an ISO date is a date, as in Obsidian
-  const value = coerceDateString(rawValue);
+  const value = isTagProperty(column) ? asTags(rawValue) : coerceDateString(rawValue);
   if (value === null || value === undefined) {
     return <span class="bases-empty">—</span>;
   }
@@ -72,9 +120,7 @@ export function renderCellValue(rawValue: unknown, ctx: RenderCtx): ComponentChi
     return renderExternalLink(value.url, value.display);
   }
 
-  if (value instanceof TagValue) {
-    return <span class="bases-text bases-tag">{value.name}</span>;
-  }
+  if (value instanceof TagValue) return renderTag(value, ctx);
 
   if (value instanceof Duration) {
     return <span class="bases-duration">{humanizeDuration(value, ctx.locale)}</span>;

@@ -35,6 +35,8 @@ export interface ViewRendererProps {
   linkResolution: "absolute" | "relative" | "shortest";
   /** Plugin-level options from the view type registration, if any. */
   options?: Record<string, unknown>;
+  /** Whether the site generates tag pages (tags then link to them) */
+  tagPages?: boolean;
 }
 
 /** View renderer function signature */

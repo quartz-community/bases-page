@@ -77,6 +77,7 @@ const CardsView: ViewRenderer = ({
   slug,
   allSlugs,
   linkResolution,
+  tagPages,
 }) => {
   const imageProperty = typeof view.image === "string" && view.image ? view.image : undefined;
   const columns = (view.order ?? ["file.name"]).filter((column) => column !== imageProperty);
@@ -102,7 +103,7 @@ const CardsView: ViewRenderer = ({
       </div>
       <div class="bases-cards" style={gridStyle}>
         {entries.map((entry) => {
-          const ctx = { slug, allSlugs, linkResolution, locale };
+          const ctx = { slug, allSlugs, linkResolution, locale, tagPages };
           const imageValue = imageProperty
             ? resolveEntryPropertyValue(imageProperty, entry)
             : undefined;
@@ -157,7 +158,7 @@ const CardsView: ViewRenderer = ({
                         {isEmptyValue(value) ? (
                           <span class="bases-empty-value">—</span>
                         ) : (
-                          renderCellValue(value, ctx)
+                          renderCellValue(value, ctx, column)
                         )}
                       </span>
                     </div>

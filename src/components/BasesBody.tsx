@@ -11,6 +11,7 @@ import { registerCustomViews, viewRegistry } from "../registry";
 import { ViewSelector } from "./ViewSelector";
 import { registerBuiltinViews } from "./views";
 import { initialViewIndex } from "../views";
+import { siteHasTagPages } from "../tagPages";
 import style from "./styles/bases.scss";
 // @ts-expect-error inline script import handled by esbuild plugin
 import script from "./scripts/bases.inline.ts";
@@ -99,6 +100,7 @@ export default ((opts?: BasesPageOptions) => {
                     allSlugs={allSlugs}
                     linkResolution={linkResolution}
                     options={registration.options}
+                    tagPages={siteHasTagPages(props.ctx)}
                   />
                 ) : (
                   <div class="bases-empty">Unknown view type: {view.type}</div>
