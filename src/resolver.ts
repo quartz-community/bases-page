@@ -8,11 +8,11 @@ function normalizeStringArray(values: unknown): string[] {
 }
 
 // Files carry a source `filePath`: Quartz's parser sets it on notes, and page
-// types that render source files (canvas-page, obsidian-plugin-excalidraw) set
-// it, with the real relativePath, on the virtual page that stands for the file.
-// Other virtual pages (404, tag and folder listings, .base pages, …) only get a
-// synthetic `<slug>.md` relativePath; they are not files, and Obsidian never
-// lists them.
+// types that render source files (canvas-page, obsidian-plugin-excalidraw, and
+// this plugin for .base pages) set it, with the real relativePath, on the
+// virtual page that stands for the file. Other virtual pages (404, tag and
+// folder listings, …) only get a synthetic `<slug>.md` relativePath; they are
+// not files, and Obsidian never lists them. .base pages are left out below.
 function isSourceFile(fileData: QuartzPluginData): boolean {
   return typeof fileData.filePath === "string" && fileData.filePath !== "";
 }

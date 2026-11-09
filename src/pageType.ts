@@ -14,7 +14,7 @@ import { h, Fragment } from "preact";
 import { fromHtml } from "hast-util-from-html";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { slugifyFilePath } from "@quartz-community/utils";
+import { joinSegments, slugifyFilePath } from "@quartz-community/utils";
 import type { SimpleSlug } from "@quartz-community/utils";
 import { parseBasesData } from "./parser";
 import { buildSelfContext, resolveBasesEntries } from "./resolver";
@@ -76,6 +76,11 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
         slug,
         title: baseName,
         data: {
+          // The page stands for the .base file: give it the file's paths (instead of the
+          // synthetic `<slug>.md`), like canvas pages. Publish filters see a file without
+          // frontmatter (bases-page#11), and the content index has its real path.
+          filePath: joinSegments(ctx.argv.directory, filePath) as FilePath,
+          relativePath: filePath as unknown as FilePath,
           frontmatter: { title: baseName, tags: [] },
           links: resolveBasesEntries(
             basesData,
