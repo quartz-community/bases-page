@@ -186,7 +186,7 @@ function buildFileValue(path: string): EvalContext["file"] {
   const lastDot = fileName.lastIndexOf(".");
   const basename = lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
   const ext = lastDot > 0 ? fileName.slice(lastDot + 1) : "";
-  const folder = lastSlash >= 0 ? normalized.slice(0, lastSlash) : "";
+  const folder = lastSlash >= 0 ? normalized.slice(0, lastSlash) : "/";
   const fullname = fileName || normalized;
   const base = basename || fullname;
 
@@ -411,7 +411,8 @@ registerMethodFunction("file", "hasLink", (target, [link], context) => {
     path = resolveLink(raw, context)?.path ?? lookupFile(raw, context)?.path ?? raw;
   }
   const wanted = linkSlug(path);
-  return target.links.some((l) => linkSlug(l) === wanted);
+  // an embed (![[Tasks.base]]) is a link too
+  return [...target.links, ...(target.embeds ?? [])].some((l) => linkSlug(l) === wanted);
 });
 
 registerMethodFunction("file", "inFolder", (target, [folder]) => {

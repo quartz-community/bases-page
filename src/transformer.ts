@@ -83,6 +83,9 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
                 return;
               }
 
+              // the note embeds the base: file.embeds lists it, so file.hasLink(this) on the
+              // .base page finds the note, as in Obsidian
+              embeds.push(url);
               if (!file.data.basesBlocks) file.data.basesBlocks = [];
               const blockIndex = file.data.basesBlocks.length;
               file.data.basesBlocks.push(basesData);
@@ -107,7 +110,9 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
         },
         () => {
           return (tree: HTMLRoot, file: VFile) => {
-            const basesBlocks: BasesData[] = [];
+            // Continue after the embedded .base files the pass above registered: with its own
+            // index from 0, an inline block took the slot of the first embed (community PR #2).
+            const basesBlocks: BasesData[] = file.data.basesBlocks ?? [];
 
             visit(tree, "element", (node: Element, index, parent) => {
               if (!parent || index === undefined) return;

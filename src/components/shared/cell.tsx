@@ -160,6 +160,11 @@ export function renderCellValue(
   }
 
   if (typeof value === "object") {
+    // `this` shows as its file
+    const self = value as Record<string, unknown>;
+    if (!isFileValue(value) && isFileValue(self.file) && "note" in self) {
+      return renderCellValue(self.file, ctx);
+    }
     if (isFileValue(value)) {
       const href = transformLink(
         ctx.slug as FullSlug,
@@ -171,7 +176,7 @@ export function renderCellValue(
       );
       return (
         <a href={href} class="internal internal-link">
-          {value.basename}
+          {value.name || value.basename}
         </a>
       );
     }

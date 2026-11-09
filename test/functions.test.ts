@@ -96,7 +96,7 @@ describe("string methods", () => {
       basename: "readme",
       fullname: "readme.md",
       path: "readme.md",
-      folder: "",
+      folder: "/",
       ext: "md",
       tags: [],
       links: [],

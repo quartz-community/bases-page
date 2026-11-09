@@ -79,10 +79,12 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
       const baseName = fileWithoutExt.split("/").pop() ?? "Base";
 
       const lastSlash = filePath.lastIndexOf("/");
-      const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
+      const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "/";
       const dotIndex = filePath.lastIndexOf(".");
       const ext = dotIndex >= 0 ? filePath.slice(dotIndex + 1) : "";
+      // opened directly, `this` is the .base file itself, without properties
       const basesSelfContext = {
+        note: {},
         file: {
           name: filePath.split("/").pop() ?? baseName,
           basename: baseName,

@@ -68,7 +68,8 @@ function buildFileProperties(
   const basename = baseName || slug.split("/").pop() || "Untitled";
   const fullname = (filePath ? getFileName(filePath) : "") || basename;
   const lastSlash = filePath.lastIndexOf("/");
-  const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
+  // as in Obsidian, the root folder is "/"
+  const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "/";
   const lastDot = fullname.lastIndexOf(".");
   const ext = lastDot > 0 ? fullname.slice(lastDot + 1) : "";
   const name = fileNameFor(fullname, basename, ext);
@@ -140,6 +141,12 @@ export function evalNote(properties: Record<string, unknown>): Record<string, un
   };
 }
 
+/** `this` for a file value: its properties as `this.<key>`, then `this.file` and `this.note`. */
+export function selfContextFor(file: EvalContext["file"]): NonNullable<EvalContext["self"]> {
+  const note = file.properties ?? {};
+  return { ...note, file, note };
+}
+
 /**
  * The `this` context for a base rendered inside a note: `this.file` is the
  * embedding note's full file value (as `file` is for each entry), so methods
@@ -149,7 +156,7 @@ export function buildSelfContext(fileData: QuartzPluginData): NonNullable<EvalCo
   const slug = typeof fileData.slug === "string" ? fileData.slug : "";
   const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
   const properties = noteProperties(fileData);
-  return { file: evalFile(buildFileProperties(fileData, slug, frontmatter), properties) };
+  return selfContextFor(evalFile(buildFileProperties(fileData, slug, frontmatter), properties));
 }
 
 function compareSort(a: unknown, b: unknown): number {

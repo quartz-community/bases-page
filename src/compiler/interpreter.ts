@@ -34,15 +34,20 @@ export type EvalContext = {
     size?: number;
   };
   formula: Record<string, unknown>;
+  /**
+   * `this`: the note (or .base file) the base is rendered in. As in Obsidian, `this.file` is
+   * its full file value, `this.note` its properties, and `this.<key>` a property
+   * (keys named `file` or `note` are reachable through `this.note[...]`).
+   */
   self?: {
-    // The note (or .base file) the base is rendered in. A full file value, so
-    // this.file.asLink(), this.file.inFolder(...) etc. work like file.*.
     file: Partial<EvalContext["file"]> & {
       name: string;
       path: string;
       folder: string;
       ext: string;
     };
+    note?: Record<string, unknown>;
+    [key: string]: unknown;
   };
   /** The site's locale (Quartz `configuration.locale`), for date and duration display */
   locale?: string;
