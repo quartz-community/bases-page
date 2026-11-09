@@ -221,8 +221,12 @@ export interface BasesEntry {
   properties: Record<string, unknown>;
   /** File metadata properties */
   fileProperties: {
+    /** As in Obsidian: no extension for Markdown notes (`Note`), with it for other files (`Plan.canvas`) */
     name: string;
+    /** The name without the extension */
     basename: string;
+    /** The name with the extension */
+    fullname?: string;
     path: string;
     folder: string;
     ext: string;

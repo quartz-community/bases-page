@@ -67,8 +67,9 @@ describe("string methods", () => {
   it("converts string to file value with asFile", () => {
     const result = evaluate('"notes/example.md".asFile()', context);
     expect(result).toEqual({
-      name: "example.md",
+      name: "example",
       basename: "example",
+      fullname: "example.md",
       path: "notes/example.md",
       folder: "notes",
       ext: "md",
@@ -77,11 +78,23 @@ describe("string methods", () => {
     });
   });
 
+  it("file.name of a file value: no extension for Markdown notes, kept for other files", () => {
+    expect(evaluate('file("notes/Plan.canvas").name', context)).toBe("Plan.canvas");
+    expect(evaluate('file("notes/Plan.canvas").basename', context)).toBe("Plan");
+    expect(evaluate('file("Drawing.excalidraw.md").name', context)).toBe("Drawing.excalidraw");
+    expect(evaluate('file("Drawing.excalidraw.md").fullname', context)).toBe(
+      "Drawing.excalidraw.md",
+    );
+    expect(evaluate('file("noext").name', context)).toBe("noext");
+    expect(evaluate('file("X.base").name', context)).toBe("X.base");
+  });
+
   it("handles asFile on filename without folder", () => {
     const result = evaluate('"readme.md".asFile()', context);
     expect(result).toEqual({
-      name: "readme.md",
+      name: "readme",
       basename: "readme",
+      fullname: "readme.md",
       path: "readme.md",
       folder: "",
       ext: "md",
@@ -522,8 +535,9 @@ describe("duration and file helpers", () => {
 
   it("builds file objects", () => {
     expect(evaluate('file("notes/test.md")', context)).toEqual({
-      name: "test.md",
+      name: "test",
       basename: "test",
+      fullname: "test.md",
       path: "notes/test.md",
       folder: "notes",
       ext: "md",

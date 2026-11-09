@@ -64,6 +64,7 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
         file: {
           name: filePath.split("/").pop() ?? baseName,
           basename: baseName,
+          fullname: filePath.split("/").pop() ?? baseName,
           path: filePath,
           folder,
           ext,

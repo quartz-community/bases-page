@@ -266,10 +266,14 @@ function buildFileValue(path: string): EvalContext["file"] {
   const basename = lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
   const ext = lastDot > 0 ? fileName.slice(lastDot + 1) : "";
   const folder = lastSlash >= 0 ? normalized.slice(0, lastSlash) : "";
+  const fullname = fileName || normalized;
+  const base = basename || fullname;
 
   return {
-    name: fileName || normalized,
-    basename: basename || fileName || normalized,
+    // as in Obsidian: a Markdown note's name has no extension, other files keep it
+    name: ext === "md" ? base : fullname,
+    basename: base,
+    fullname,
     path: normalized,
     folder,
     ext,

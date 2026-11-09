@@ -54,8 +54,7 @@ function renderRow(
     <tr>
       {columns.map((column) => {
         const value = resolveEntryPropertyValue(column, entry);
-        // file.name has the extension (`Note.md`); the link shows the name without it, as Obsidian does
-        const display = column === "file.name" ? entry.fileProperties.basename : formatValue(value);
+        const display = formatValue(value);
         const isPrimary = column === "file.name" || column === "title";
         const columnWidth = view.columnSize?.[column];
         const style = columnWidth

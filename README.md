@@ -92,7 +92,9 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 ### Property Access
 
 - `note.property`: Access a property on the current note.
-- `file.name`: The name of the file.
+- `file.name`: The name of the file, as in Obsidian: without the extension for Markdown notes (`Note`), with it for other files (`Plan.canvas`).
+- `file.basename`: The name without the extension.
+- `file.fullname`: The name with the extension (`Note.md`).
 - `file.path`: The full path of the file.
 - `file.folder`: The folder containing the file.
 - `file.ext`: The file extension.

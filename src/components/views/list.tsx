@@ -53,7 +53,7 @@ const ListView: ViewRenderer = ({
                   class="internal internal-link"
                   data-slug={entry.slug}
                 >
-                  {entry.title}
+                  {entry.fileProperties.name || entry.title}
                 </a>
               ) : (
                 renderCellValue(resolveEntryPropertyValue(primaryColumn, entry), ctx)

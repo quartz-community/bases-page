@@ -37,6 +37,15 @@ function getBaseName(path: string): string {
   return dot > 0 ? fileName.slice(0, dot) : fileName;
 }
 
+/**
+ * `file.name` as Obsidian's Bases gives it: a Markdown note's name has no extension
+ * (`Note`, `Drawing.excalidraw`), every other file keeps it (`Plan.canvas`, `X.base`).
+ * `file.basename` never has the extension, `file.fullname` always does.
+ */
+export function fileNameFor(fullname: string, basename: string, ext: string): string {
+  return ext === "md" ? basename : fullname;
+}
+
 function toDate(value: unknown): Date | undefined {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   if (typeof value === "string") {
@@ -54,12 +63,12 @@ function buildFileProperties(
   const filePath = getFilePath(fileData, slug);
   const baseName = filePath ? getBaseName(filePath) : getBaseName(slug);
   const basename = baseName || slug.split("/").pop() || "Untitled";
-  // as in Obsidian: file.name has the extension (`Plan.canvas`, `Note.md`), file.basename doesn't
-  const name = (filePath ? getFileName(filePath) : "") || basename;
+  const fullname = (filePath ? getFileName(filePath) : "") || basename;
   const lastSlash = filePath.lastIndexOf("/");
   const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
-  const lastDot = filePath.lastIndexOf(".");
-  const ext = lastDot >= 0 ? filePath.slice(lastDot + 1) : "";
+  const lastDot = fullname.lastIndexOf(".");
+  const ext = lastDot > 0 ? fullname.slice(lastDot + 1) : "";
+  const name = fileNameFor(fullname, basename, ext);
   const tags = normalizeStringArray(frontmatter.tags);
   const links = normalizeStringArray(fileData.links ?? fileData.outgoingLinks);
   const embeds = normalizeStringArray(fileData.embeds);
@@ -71,6 +80,7 @@ function buildFileProperties(
   return {
     name,
     basename,
+    fullname,
     path: filePath,
     folder,
     ext,

@@ -6,6 +6,7 @@ export type EvalContext = {
   file: {
     name: string;
     basename: string;
+    fullname?: string;
     path: string;
     folder: string;
     ext: string;
