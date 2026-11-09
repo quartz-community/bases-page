@@ -54,5 +54,7 @@ export {
   parseDuration,
   parseIsoDate,
   relativeFromNow,
+  TagValue,
+  UrlValue,
 } from "./values";
 export type { EvalContext, CompiledExpression };

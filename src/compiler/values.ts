@@ -584,3 +584,23 @@ export function formatMoment(date: Date, format: string, locale = "en-US"): stri
     }
   });
 }
+
+// ---------------------------------------------------------------------------- links
+
+/** A URL with a scheme (`https:`, `mailto:`, `obsidian:` …), as `link()` treats it. */
+export const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:[^\s]+$/i;
+
+/** `link("https://…", "Label")`: Obsidian's UrlValue, an external link with the real href. */
+export class UrlValue {
+  constructor(
+    public readonly url: string,
+    public readonly display?: string,
+  ) {}
+  toString(): string {
+    return this.url;
+  }
+}
+
+export function isUrlValue(value: unknown): value is UrlValue {
+  return value instanceof UrlValue;
+}

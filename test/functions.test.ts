@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evaluate } from "../src/compiler";
+import { evaluate, UrlValue } from "../src/compiler";
 import type { EvalContext } from "../src/compiler";
 
 const eventDate = new Date(2024, 0, 15, 12, 0, 0);
@@ -227,7 +227,7 @@ describe("string methods", () => {
       note: { ...context.note, location: "[[tavern]]" },
     };
     expect(evaluate("location.asFile().path == this.file.path", ctx)).toBe(true);
-    expect(evaluate("location.asFile().asLink()", ctx)).toBe("[[places/tavern]]");
+    expect(evaluate("location.asFile().asLink()", ctx)).toBe("[[places/tavern.md]]");
   });
 
   it.each([
@@ -573,12 +573,12 @@ describe("duration and file helpers", () => {
   });
 
   it("supports file.asLink()", () => {
-    expect(evaluate("file.asLink()", context)).toBe("[[notes/test]]");
+    expect(evaluate("file.asLink()", context)).toBe("[[notes/test.md]]");
   });
 
   it("supports file.asLink() with display text", () => {
-    expect(evaluate('file.asLink("My Note")', context)).toBe("[[notes/test|My Note]]");
-    expect(evaluate('file.asLink("Custom")', context)).toBe("[[notes/test|Custom]]");
+    expect(evaluate('file.asLink("My Note")', context)).toBe("[[notes/test.md|My Note]]");
+    expect(evaluate('file.asLink("Custom")', context)).toBe("[[notes/test.md|Custom]]");
   });
 
   it("supports hasTag with nested tag matching", () => {
@@ -619,16 +619,28 @@ describe("link helpers", () => {
     expect(evaluate('link("other/page", file)', context)).toBe("[[other/page|test]]");
   });
 
-  it("creates markdown links for external URLs in link()", () => {
-    expect(evaluate('link("https://example.com")', context)).toBe(
-      "[https://example.com](https://example.com)",
+  it("creates external links for external URLs in link()", () => {
+    expect(evaluate('link("https://example.com")', context)).toEqual(
+      new UrlValue("https://example.com"),
     );
-    expect(evaluate('link("https://" + "example.com", "example.com")', context)).toBe(
-      "[example.com](https://example.com)",
+    expect(evaluate('link("https://" + "example.com", "example.com")', context)).toEqual(
+      new UrlValue("https://example.com", "example.com"),
     );
-    expect(evaluate('link("http://example.com/a", file)', context)).toBe(
-      "[test](http://example.com/a)",
+    expect(evaluate('link("http://example.com/a", file)', context)).toEqual(
+      new UrlValue("http://example.com/a", "test"),
     );
+  });
+
+  it("treats any URL scheme as external, as Obsidian does", () => {
+    expect(evaluate('link("mailto:a@example.com")', context)).toEqual(
+      new UrlValue("mailto:a@example.com"),
+    );
+    expect(evaluate('link("obsidian://open?vault=x")', context)).toEqual(
+      new UrlValue("obsidian://open?vault=x"),
+    );
+    expect(evaluate('link("note-a")', context)).toBe("[[note-a]]");
+    expect(evaluate('link("[[note-a]]", "Alias")', context)).toBe("[[note-a|Alias]]");
+    expect(evaluate('link("https://example.com").isType("link")', context)).toBe(false);
   });
 
   it("handles file object in both arguments of link()", () => {
@@ -720,7 +732,7 @@ describe("link-valued needles (this.file.asLink())", () => {
   });
 
   it("this.file.asLink() links to the embedding note", () => {
-    expect(evaluate("this.file.asLink()", ctx({}))).toBe("[[people/Alice]]");
+    expect(evaluate("this.file.asLink()", ctx({}))).toBe("[[people/Alice.md]]");
   });
 
   it("matches scalar and list link properties and resolved file links", () => {

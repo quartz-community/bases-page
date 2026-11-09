@@ -2,12 +2,13 @@ import type { ComponentChild } from "preact";
 import type { FullSlug } from "@quartz-community/types";
 
 import type { BasesData, BasesEntry, BasesView } from "../../types";
-import { renderTextWithLinks } from "./links";
+import { renderExternalLink, renderTextWithLinks } from "./links";
 import { transformLink, slugifyPath } from "@quartz-community/utils";
 import {
   Duration,
   ErrorValue,
   TagValue,
+  UrlValue,
   coerceDateString,
   displayDate,
   humanizeDuration,
@@ -65,6 +66,10 @@ export function renderCellValue(rawValue: unknown, ctx: RenderCtx): ComponentChi
         <span class="bases-formula-error-message">{value.message}</span>
       </span>
     );
+  }
+
+  if (value instanceof UrlValue) {
+    return renderExternalLink(value.url, value.display);
   }
 
   if (value instanceof TagValue) {

@@ -11,6 +11,9 @@ import {
   parseDuration,
   parseIsoDate,
   relativeFromNow,
+  URL_SCHEME_RE,
+  UrlValue,
+  isUrlValue,
 } from "./values";
 import { tagMatches } from "../tags";
 
@@ -337,8 +340,9 @@ registerGlobalFunction("link", ([path, display]) => {
   const target = linkTarget(path);
   if (!target) return "";
   const label = isFileValue(display) ? display.basename : toStringValue(display);
-  // External URLs are not wikilinks; a markdown link renders as an external link
-  if (/^https?:\/\//i.test(target)) return `[${label || target}](${target})`;
+  // As in Obsidian, a target with a URL scheme (https:, mailto:, obsidian:, …) is an external
+  // link with that exact href; anything else is a link to a note.
+  if (URL_SCHEME_RE.test(target)) return new UrlValue(target, label || undefined);
   return label ? `[[${target}|${label}]]` : `[[${target}]]`;
 });
 
@@ -613,9 +617,10 @@ registerMethodFunction("list", "round", (target, [digits]) => {
   });
 });
 
+// As in Obsidian, the link is to the file's full path, shown as written (`folder/Note.md`).
 registerMethodFunction("file", "asLink", (target, args) => {
   if (!isFileValue(target)) return "";
-  const path = target.path.replace(/\.md$/, "");
+  const path = target.path;
   const display = args.length > 0 ? toStringValue(args[0]) : "";
   return display ? `[[${path}|${display}]]` : `[[${path}]]`;
 });
@@ -747,6 +752,7 @@ registerAnyMethod("isType", (target, [typeName]) => {
   const expected = toStringValue(typeName).toLowerCase();
   if (isDuration(target)) return expected === "duration";
   if (isTagValue(target)) return expected === "string";
+  if (isUrlValue(target)) return expected === "url";
   if (typeof target === "string") return expected === "string";
   if (typeof target === "number") return expected === "number";
   if (isDateValue(target)) return expected === "date";
