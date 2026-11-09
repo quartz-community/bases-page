@@ -1,12 +1,14 @@
 # @quartz-community/bases-page
 
-A page type and component plugin for Quartz v5 that renders Obsidian Bases (.base files) as database-like filtered views. This plugin (v0.2.0) provides a powerful way to visualize and interact with your Obsidian data in a structured format.
+A page type and component plugin for Quartz v5 that renders Obsidian Bases (.base files) as database-like filtered views: tables, lists, cards, galleries and boards. Bases can also be embedded in notes (`![[Tasks.base]]`, one view with `![[Tasks.base#Open tasks]]`) or written inline as ` ```base ` code blocks.
 
 ## Installation
 
 ```bash
-npx quartz plugin add github:quartz-community/bases-page
+npx quartz plugin add @quartz-community/bases-page
 ```
+
+It is already included (and enabled) in the default `quartz.config.yaml`.
 
 ## Usage
 
@@ -14,9 +16,32 @@ Enable the plugin in your Quartz configuration:
 
 ```yaml title="quartz.config.yaml"
 plugins:
-  - source: github:quartz-community/bases-page
+  - source: "@quartz-community/bases-page"
     enabled: true
+    options:
+      linkResolution: shortest
+    order: 50
 ```
+
+## Obsidian compatibility
+
+bases-page 1.2 (shipped with Quartz 5.1) evaluates bases like Obsidian. Notable behaviour, some of it changed from earlier versions:
+
+- A base opens on its **first view** (`defaultViewType` has no default).
+- `file.name` is the name without the extension for Markdown notes (`Note`) and with it for other files (`Plan.canvas`, `Tasks.base`). `file.basename` never has the extension, `file.fullname` always does (`Note.md`).
+- `file.tags` lists tags as written, with `#` and their original case, inline tags first. The `tags` property holds only the frontmatter tags.
+- `file.hasTag("a/b")`, `file.tags.contains("a/b")`, `containsAny` and `containsAll` also match nested tags (`a/b/c`) by whole segments, ignoring case and a leading `#`. `file.hasTag("x", "y")` is true when the note has **any** of the tags.
+- Dates are shown as Obsidian shows them (moment's `L` / `L LT`) in the site's `configuration.locale`; `.format()` and `.relative()` are locale-aware. `date()` only reads ISO-style strings (`2024-03-05`, `2024-03-05 14:30`, `2024-03-05T14:30:00Z`) and `20240305`, in local time; other strings give an empty value.
+- Subtracting dates gives a duration, shown humanized (`9 days`). `duration()` takes one whole number and one unit (`1d`, `2 weeks`).
+- `imageAspectRatio` on cards is height / width (0.5 is a wide cover, 2 a tall one; default 1).
+- `file.folder` of a file at the root of the vault is `/`.
+- `contains()`, `containsAny()` and `containsAll()` on text ignore case; on lists they are case-sensitive.
+- `this`: in a base embedded in a note, `this.<key>` and `this.file` are that note's properties and file; on the `.base` page itself, `this` is the `.base` file.
+- Tags link to their tag pages (when tag-page is enabled); links to missing notes get Quartz's `broken` class.
+- A formula error (such as an unknown function) is shown in its cell.
+- With Quartz 5.1, `.base` pages follow the site's publish filters (e.g. explicit-publish, drafts): a `.base` file has no frontmatter, so with explicit-publish it is published only when a published note links to it.
+
+Map views from Obsidian are not supported: a view with an unknown type shows `Unknown view type: <type>`.
 
 ## Interaction with `unlisted` pages
 
@@ -45,6 +70,7 @@ ExternalPlugin.BasesPage({
       allSlugs,
       linkResolution,
       options,
+      tagPages,
     }) => {
       // return JSX
     },
@@ -81,16 +107,22 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 - Booleans
 - Null
 - Lists
+- Objects
+- Dates
+- Durations
+- Files
+- Links
 
 ### Operators
 
-- **Arithmetic**: +, -, \*, /
+- **Arithmetic**: +, -, \*, /, %
+- **Date arithmetic**: date ± duration gives a date, date − date gives a duration
 - **Comparison**: ==, !=, >, <, >=, <=
 - **Logical**: and / &&, or / ||, not / !
 
 ### Property Access
 
-- `note.property`: Access a property on the current note.
+- `note.property` (or just `property`): Access a property on the current note.
 - `file.name`: The name of the file, as in Obsidian: without the extension for Markdown notes (`Note`), with it for other files (`Plan.canvas`).
 - `file.basename`: The name without the extension.
 - `file.fullname`: The name with the extension (`Note.md`).
@@ -99,9 +131,12 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 - `file.ext`: The file extension.
 - `file.tags`: A list of tags associated with the file.
 - `file.links`: A list of links in the file.
-- `file.created`: The creation date of the file.
-- `file.modified`: The last modification date of the file.
+- `file.embeds`: A list of embeds in the file.
+- `file.properties`: The note's properties.
+- `file.ctime` / `file.created`: The creation date of the file.
+- `file.mtime` / `file.modified`: The last modification date of the file.
 - `formula.name`: Access the result of another formula.
+- `this`: The note the base is embedded in (`this.<key>`, `this.file`, `this.note`), or the `.base` file on its own page.
 
 ### Built-in Global Functions
 
@@ -137,6 +172,11 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 - `isEmpty()`
 - `repeat(count)`
 - `reverse()`
+- `containsAll(...values)`
+- `containsAny(...values)`
+- `split(separator)`
+- `title()`
+- `asFile()`
 
 **Numbers**
 
@@ -145,6 +185,7 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 - `floor()`
 - `ceil()`
 - `abs()`
+- `isEmpty()`
 
 **Dates**
 
@@ -152,8 +193,15 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 - `year()`
 - `month()`
 - `day()`
+- `date()`
 - `time()`
 - `relative()`
+- `isEmpty()`
+- Fields: `.year`, `.month`, `.day`, `.hour`, `.minute`, `.second`
+
+**Durations**
+
+- Fields: `.days`, `.hours`, `.minutes`, `.seconds`, `.milliseconds`, `.weeks` (fractional), `.months`, `.years`
 - `isEmpty()`
 
 **Lists**
@@ -164,13 +212,32 @@ The expression engine follows a pipeline of source, lexer, Pratt parser, AST, by
 - `min()`
 - `max()`
 - `round()`
+- `contains(value)`
+- `containsAll(...values)`
+- `containsAny(...values)`
+- `flat()`
+- `isEmpty()`
+- `join(separator)`
+- `reverse()`
+- `slice(start, end?)`
+- `sort()`
+- `unique()`
+- `filter(expr)`, `map(expr)`, `flatMap(expr)`, `find(expr)`, `some(expr)`, `every(expr)` (`value` is the current element)
+- `.length`
 
 **File**
 
-- `hasTag(tag)`
+- `hasTag(...tags)`
 - `hasLink(link)`
 - `inFolder(folder)`
 - `hasProperty(property)`
+- `asLink(display?)`
+
+**Objects**
+
+- `isEmpty()`
+- `keys()`
+- `values()`
 
 ## Extending with Custom Views
 
@@ -225,6 +292,7 @@ interface ViewRendererProps {
   allSlugs: string[];
   linkResolution: "absolute" | "relative" | "shortest";
   options?: Record<string, unknown>;
+  tagPages?: boolean; // whether tags link to tag pages
 }
 ```
 
@@ -283,15 +351,30 @@ interface EvalContext {
   note: Record<string, unknown>;
   file: {
     name: string;
+    basename: string;
+    fullname?: string;
     path: string;
     folder: string;
     ext: string;
     tags: string[];
     links: string[];
-    created?: string;
-    modified?: string;
+    embeds?: string[];
+    properties?: Record<string, unknown>;
+    created?: string | Date;
+    modified?: string | Date;
+    ctime?: Date;
+    mtime?: Date;
+    size?: number;
   };
   formula: Record<string, unknown>;
+  /** `this`: the embedding note (or the .base file): `this.file`, `this.note`, `this.<key>` */
+  self?: {
+    file: Partial<EvalContext["file"]>;
+    note?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+  /** The site's locale, for date and duration display */
+  locale?: string;
 }
 ```
 
@@ -305,11 +388,11 @@ interface EvalContext {
 
 ## Configuration Options
 
-| Option            | Type                                     | Default      | Description                                                                                         |
-| :---------------- | :--------------------------------------- | :----------- | :-------------------------------------------------------------------------------------------------- |
-| `defaultViewType` | `string`                                 | unset        | Open bases on their first view of this type. Unset, a base opens on its first view, as in Obsidian. |
-| `linkResolution`  | `"absolute" \| "relative" \| "shortest"` | `"shortest"` | How to resolve internal links in view renderers. Should match your crawl-links plugin setting.      |
-| `customViews`     | `Record<string, ViewRenderer>`           | `{}`         | Custom view renderers provided via TypeScript override.                                             |
+| Option            | Type                                     | Default      | Description                                                                                                 |
+| :---------------- | :--------------------------------------- | :----------- | :---------------------------------------------------------------------------------------------------------- |
+| `defaultViewType` | `string`                                 | unset        | Open bases on their first view of this type. Unset, a base opens on its first view, as in Obsidian.         |
+| `linkResolution`  | `"absolute" \| "relative" \| "shortest"` | `"shortest"` | How to resolve internal links in view renderers. Should match `configuration.links.markdownLinkResolution`. |
+| `customViews`     | `Record<string, ViewRenderer>`           | `{}`         | Custom view renderers (keyed by view type; override or add view types). Requires a `quartz.ts` override.    |
 
 ## License
 
