@@ -810,9 +810,10 @@ describe("self.file compatibility", () => {
   });
 
   it("supports this.file.asLink()", () => {
-    expect(evaluate("this.file.asLink()", ctx)).toBe("[[Folder/Example]]");
+    // Obsidian 1.15 shows a file's asLink() with its path and extension (folder/Note.md)
+    expect(evaluate("this.file.asLink()", ctx)).toBe("[[Folder/Example.md]]");
 
-    expect(evaluate('this.file.asLink("Custom")', ctx)).toBe("[[Folder/Example|Custom]]");
+    expect(evaluate('this.file.asLink("Custom")', ctx)).toBe("[[Folder/Example.md|Custom]]");
   });
 
   it("supports link(this.file)", () => {
@@ -830,8 +831,8 @@ describe("self.file compatibility", () => {
   it("does not confuse this.file with the current entry file", () => {
     expect(evaluate("file.path", ctx)).toBe("notes/test.md");
     expect(evaluate("this.file.path", ctx)).toBe("Folder/Example.md");
-    expect(evaluate("file.asLink()", ctx)).toBe("[[notes/test]]");
-    expect(evaluate("this.file.asLink()", ctx)).toBe("[[Folder/Example]]");
+    expect(evaluate("file.asLink()", ctx)).toBe("[[notes/test.md]]");
+    expect(evaluate("this.file.asLink()", ctx)).toBe("[[Folder/Example.md]]");
   });
 
   it("supports standalone .base files", () => {
