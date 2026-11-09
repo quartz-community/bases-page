@@ -1,6 +1,9 @@
 import type { BasesData, BasesEntry, BasesView, QuartzPluginData, SortEntry } from "./types";
 import { evaluate, evaluateFilter, isDuration, resolvePropertyValue } from "./compiler";
 import type { EvalContext } from "./compiler";
+import { TagValue } from "./compiler/values";
+import { withHash } from "./tags";
+import type { NoteTags } from "./tags";
 
 function normalizeStringArray(values: unknown): string[] {
   if (!Array.isArray(values)) return [];
@@ -69,7 +72,7 @@ function buildFileProperties(
   const lastDot = fullname.lastIndexOf(".");
   const ext = lastDot > 0 ? fullname.slice(lastDot + 1) : "";
   const name = fileNameFor(fullname, basename, ext);
-  const tags = normalizeStringArray(frontmatter.tags);
+  const tags = noteTags(fileData)?.file ?? normalizeStringArray(frontmatter.tags).map(withHash);
   const links = normalizeStringArray(fileData.links ?? fileData.outgoingLinks);
   const embeds = normalizeStringArray(fileData.embeds);
 
@@ -94,6 +97,49 @@ function buildFileProperties(
   };
 }
 
+function noteTags(fileData: QuartzPluginData): NoteTags | undefined {
+  const tags = (fileData as { basesTags?: unknown }).basesTags;
+  if (!tags || typeof tags !== "object" || !Array.isArray((tags as NoteTags).file))
+    return undefined;
+  return tags as NoteTags;
+}
+
+/**
+ * A note's properties as Obsidian's Bases reads them: `tags` holds the frontmatter tags as
+ * written (with `#`), not Quartz's slugged list with the inline tags merged in.
+ */
+export function noteProperties(fileData: QuartzPluginData): Record<string, unknown> {
+  const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
+  const tags = noteTags(fileData);
+  if (!tags) return frontmatter;
+  const properties: Record<string, unknown> = { ...frontmatter };
+  if (tags.note) properties.tags = tags.note;
+  else delete properties.tags;
+  return properties;
+}
+
+/** The file and note values formulas see: tags are tag values (nested-tag aware). */
+export function evalFile(
+  fileProperties: BasesEntry["fileProperties"],
+  properties: Record<string, unknown>,
+): EvalContext["file"] {
+  return {
+    ...fileProperties,
+    tags: fileProperties.tags.map((tag) => new TagValue(tag)) as unknown as string[],
+    properties: evalNote(properties),
+  };
+}
+
+export function evalNote(properties: Record<string, unknown>): Record<string, unknown> {
+  const tags = properties.tags;
+  if (!Array.isArray(tags) && typeof tags !== "string") return properties;
+  const list = Array.isArray(tags) ? tags : [tags];
+  return {
+    ...properties,
+    tags: list.map((tag) => (typeof tag === "string" ? new TagValue(withHash(tag)) : tag)),
+  };
+}
+
 /**
  * The `this` context for a base rendered inside a note: `this.file` is the
  * embedding note's full file value (as `file` is for each entry), so methods
@@ -102,7 +148,8 @@ function buildFileProperties(
 export function buildSelfContext(fileData: QuartzPluginData): NonNullable<EvalContext["self"]> {
   const slug = typeof fileData.slug === "string" ? fileData.slug : "";
   const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
-  return { file: { ...buildFileProperties(fileData, slug, frontmatter), properties: frontmatter } };
+  const properties = noteProperties(fileData);
+  return { file: evalFile(buildFileProperties(fileData, slug, frontmatter), properties) };
 }
 
 function compareSort(a: unknown, b: unknown): number {
@@ -171,7 +218,7 @@ export function resolveBasesEntries(
     const fdPath = getFilePath(fd, fdSlug);
     const fm = (fd.frontmatter ?? {}) as Record<string, unknown>;
     const fp = buildFileProperties(fd, fdSlug, fm);
-    const fileValue: EvalContext["file"] = { ...fp, properties: fm };
+    const fileValue: EvalContext["file"] = evalFile(fp, noteProperties(fd));
 
     fileLookup.set(fdPath, fileValue);
     const withoutExt = fdPath.replace(/\.md$/, "");
@@ -199,9 +246,11 @@ export function resolveBasesEntries(
 
     const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
     const fileProperties = buildFileProperties(fileData, slug, frontmatter);
+    const properties = noteProperties(fileData);
+    const file = evalFile(fileProperties, properties);
     const context = {
-      note: frontmatter,
-      file: { ...fileProperties, properties: frontmatter },
+      note: file.properties ?? properties,
+      file,
       formula: {} as Record<string, unknown>,
       self: selfContext,
       _fileLookup: fileLookup,
@@ -225,7 +274,7 @@ export function resolveBasesEntries(
     entries.push({
       slug,
       title,
-      properties: frontmatter,
+      properties,
       fileProperties,
       formulaValues: context.formula,
     });

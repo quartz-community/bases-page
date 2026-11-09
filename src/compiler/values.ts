@@ -25,6 +25,31 @@ export function isErrorValue(value: unknown): value is ErrorValue {
   return value instanceof ErrorValue;
 }
 
+// ---------------------------------------------------------------------------- tags
+
+/**
+ * A tag in `file.tags` or the `tags` property: `#Src/OSE/cc`, with `#` and its original case.
+ * It behaves as a string (`toString()`, string methods, `isType("string")`), and lists of tags
+ * match nested tags in `contains()`.
+ */
+export class TagValue {
+  constructor(public readonly tag: string) {}
+  /** The tag without `#`, as Obsidian displays it */
+  get name(): string {
+    return this.tag.replace(/^#/, "");
+  }
+  toString(): string {
+    return this.tag;
+  }
+  valueOf(): string {
+    return this.tag;
+  }
+}
+
+export function isTagValue(value: unknown): value is TagValue {
+  return value instanceof TagValue;
+}
+
 // ---------------------------------------------------------------------------- dates
 
 /**

@@ -5,6 +5,7 @@ import {
   Duration,
   ErrorValue,
   FormulaError,
+  TagValue,
   coerceDateString,
   dateHasTime,
   dateToString,
@@ -118,6 +119,9 @@ function addDuration(date: Date, duration: Duration, sign: number): BasesDate {
 }
 
 function compareValues(left: unknown, right: unknown, operator: string): boolean {
+  // a tag compares as its text (`#tag`)
+  if (left instanceof TagValue) left = left.tag;
+  if (right instanceof TagValue) right = right.tag;
   if (isDuration(left) || isDuration(right)) {
     // == only holds between two durations; <, > also take "1w" or milliseconds
     if ((operator === "==" || operator === "!=") && !(isDuration(left) && isDuration(right))) {

@@ -4,7 +4,7 @@ import type { FullSlug } from "@quartz-community/types";
 import type { BasesData, BasesEntry, BasesView } from "../../types";
 import { renderTextWithLinks } from "./links";
 import { transformLink, slugifyPath } from "@quartz-community/utils";
-import { Duration, ErrorValue } from "../../compiler/values";
+import { Duration, ErrorValue, TagValue } from "../../compiler/values";
 
 type RenderCtx = {
   slug: string;
@@ -53,6 +53,10 @@ export function renderCellValue(value: unknown, ctx: RenderCtx): ComponentChild 
         <span class="bases-formula-error-message">{value.message}</span>
       </span>
     );
+  }
+
+  if (value instanceof TagValue) {
+    return <span class="bases-text bases-tag">{value.name}</span>;
   }
 
   if (value instanceof Duration) {

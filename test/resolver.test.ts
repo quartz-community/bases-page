@@ -285,7 +285,7 @@ describe("resolveBasesEntries", () => {
       path: "notes/alpha.md",
       folder: "notes",
       ext: "md",
-      tags: ["work", "important"],
+      tags: ["#work", "#important"],
       links: ["beta"],
       embeds: [],
       created: "2024-01-01T00:00:00.000Z",
@@ -473,7 +473,7 @@ describe("resolveBasesEntries", () => {
     const inheritances = halfelf?.formulaValues.Inheritances as Record<string, unknown>[];
     expect(inheritances).toHaveLength(1);
     expect(inheritances[0]?.name).toBe("elf");
-    expect(inheritances[0]?.tags).toEqual(["lineage"]);
+    expect((inheritances[0]?.tags as unknown[]).map(String)).toEqual(["#lineage"]);
   });
 
   it("resolves string.asFile() without .md extension in embeds", () => {
@@ -541,7 +541,9 @@ describe("resolveBasesEntries", () => {
     const inheritances = dryad?.formulaValues.Inheritances as Record<string, unknown>[];
     expect(inheritances).toHaveLength(3);
     expect(inheritances.map((f) => f.basename)).toEqual(["Apple", "Cherry", "Oak"]);
-    expect(inheritances.every((f) => (f.tags as string[]).includes("lineage"))).toBe(true);
+    expect(inheritances.every((f) => (f.tags as unknown[]).map(String).includes("#lineage"))).toBe(
+      true,
+    );
   });
 
   it("resolves short basename embeds with non-matching tags filtered out", () => {

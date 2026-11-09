@@ -6,9 +6,11 @@ import {
   FormulaError,
   dateToString,
   isDuration,
+  isTagValue,
   parseDuration,
   parseIsoDate,
 } from "./values";
+import { tagMatches } from "../tags";
 
 export type GlobalFunction = (args: unknown[], context: EvalContext) => unknown;
 export type MethodFunction = (target: unknown, args: unknown[], context: EvalContext) => unknown;
@@ -243,6 +245,12 @@ function sameLinkTarget(left: { path: string }, right: { path: string }): boolea
 // wikilinks (e.g. this.file.asLink()) against list items that are links, slugs or names.
 function listContains(list: unknown[], needle: unknown, context: EvalContext): boolean {
   if (list.includes(needle)) return true;
+  // a list of tags (file.tags, the tags property) contains a tag and its nested tags
+  if (list.some(isTagValue)) {
+    if (needle === undefined || needle === null) return false;
+    const query = String(needle);
+    return list.some((item) => (isTagValue(item) ? tagMatches(item.tag, query) : item === needle));
+  }
   if (needle === undefined || needle === null) return false;
   const link = resolveLink(needle, context);
   if (link) return listContainsName(list, link.name, link.path);
@@ -266,6 +274,7 @@ function typeNameOf(value: unknown): string {
 
 function getMethodTarget(value: unknown): MethodTarget | undefined {
   if (isDuration(value)) return "duration";
+  if (isTagValue(value)) return "string";
   if (typeof value === "string") return "string";
   if (typeof value === "number" && !Number.isNaN(value)) return "number";
   if (isDateValue(value)) return "date";
@@ -364,17 +373,14 @@ registerGlobalFunction("file", ([path]) => {
   return buildFileValue(path);
 });
 
+// As in Obsidian: true if the file has any of the tags or one of their nested tags,
+// ignoring case and a leading `#`.
 registerMethodFunction("file", "hasTag", (target, args) => {
   if (!isFileValue(target)) return false;
-  if (args.length === 0) return false;
-  return args.every((tag) => {
-    const value = toStringValue(tag)?.toLowerCase();
-    if (!value) return false;
-    const prefix = value.endsWith("/") ? value : `${value}/`;
-    return target.tags.some((t) => {
-      const lower = t.toLowerCase();
-      return lower === value || lower.startsWith(prefix);
-    });
+  return args.some((tag) => {
+    const query = toStringValue(tag);
+    if (!query) return false;
+    return target.tags.some((t) => tagMatches(String(t), query));
   });
 });
 
@@ -759,14 +765,14 @@ registerMethodFunction("list", "contains", (target, [needle], context) => {
   return listContains(target, needle, context);
 });
 
-registerMethodFunction("list", "containsAll", (target, args) => {
+registerMethodFunction("list", "containsAll", (target, args, context) => {
   if (!Array.isArray(target)) return false;
-  return args.every((needle) => target.includes(needle));
+  return args.every((needle) => listContains(target, needle, context));
 });
 
-registerMethodFunction("list", "containsAny", (target, args) => {
+registerMethodFunction("list", "containsAny", (target, args, context) => {
   if (!Array.isArray(target)) return false;
-  return args.some((needle) => target.includes(needle));
+  return args.some((needle) => listContains(target, needle, context));
 });
 
 registerMethodFunction("list", "flat", (target) => {
@@ -851,6 +857,7 @@ registerAnyMethod("isTruthy", (target) => Boolean(target));
 registerAnyMethod("isType", (target, [typeName]) => {
   const expected = toStringValue(typeName).toLowerCase();
   if (isDuration(target)) return expected === "duration";
+  if (isTagValue(target)) return expected === "string";
   if (typeof target === "string") return expected === "string";
   if (typeof target === "number") return expected === "number";
   if (isDateValue(target)) return expected === "date";

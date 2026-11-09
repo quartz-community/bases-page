@@ -587,9 +587,10 @@ describe("duration and file helpers", () => {
     expect(evaluate('file.hasTag("missing")', context)).toBe(false);
   });
 
-  it("supports hasTag with variadic args", () => {
+  it("supports hasTag with variadic args: any of the tags, as in Obsidian", () => {
     expect(evaluate('file.hasTag("todo", "important")', context)).toBe(true);
-    expect(evaluate('file.hasTag("todo", "missing")', context)).toBe(false);
+    expect(evaluate('file.hasTag("todo", "missing")', context)).toBe(true);
+    expect(evaluate('file.hasTag("nope", "missing")', context)).toBe(false);
   });
 
   it("hasTag is case-insensitive", () => {
