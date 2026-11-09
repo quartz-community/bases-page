@@ -7,6 +7,16 @@ function normalizeStringArray(values: unknown): string[] {
   return values.filter((value): value is string => typeof value === "string");
 }
 
+// Files carry a source `filePath`: Quartz's parser sets it on notes, and page
+// types that render source files (canvas-page, obsidian-plugin-excalidraw) set
+// it, with the real relativePath, on the virtual page that stands for the file.
+// Other virtual pages (404, tag and folder listings, .base pages, …) only get a
+// synthetic `<slug>.md` relativePath; they are not files, and Obsidian never
+// lists them.
+function isSourceFile(fileData: QuartzPluginData): boolean {
+  return typeof fileData.filePath === "string" && fileData.filePath !== "";
+}
+
 function getFilePath(fileData: QuartzPluginData, slug: string): string {
   // Prefer relativePath (relative to content dir) over filePath (absolute).
   // Self-context paths from .base files use ctx.allFiles which are relative,
@@ -43,8 +53,9 @@ function buildFileProperties(
 ): BasesEntry["fileProperties"] {
   const filePath = getFilePath(fileData, slug);
   const baseName = filePath ? getBaseName(filePath) : getBaseName(slug);
-  const name = baseName || slug.split("/").pop() || "Untitled";
   const basename = baseName || slug.split("/").pop() || "Untitled";
+  // as in Obsidian: file.name has the extension (`Plan.canvas`, `Note.md`), file.basename doesn't
+  const name = (filePath ? getFileName(filePath) : "") || basename;
   const lastSlash = filePath.lastIndexOf("/");
   const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
   const lastDot = filePath.lastIndexOf(".");
@@ -71,6 +82,17 @@ function buildFileProperties(
     ctime,
     mtime,
   };
+}
+
+/**
+ * The `this` context for a base rendered inside a note: `this.file` is the
+ * embedding note's full file value (as `file` is for each entry), so methods
+ * such as `this.file.asLink()` and `this.file.inFolder()` work.
+ */
+export function buildSelfContext(fileData: QuartzPluginData): NonNullable<EvalContext["self"]> {
+  const slug = typeof fileData.slug === "string" ? fileData.slug : "";
+  const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
+  return { file: { ...buildFileProperties(fileData, slug, frontmatter), properties: frontmatter } };
 }
 
 function compareSort(a: unknown, b: unknown): number {
@@ -131,6 +153,7 @@ export function resolveBasesEntries(
   const fileLookup = new Map<string, EvalContext["file"]>();
   for (const fd of allFiles) {
     if ((fd as { unlisted?: unknown }).unlisted === true) continue;
+    if (!isSourceFile(fd)) continue;
     const fdSlug = typeof fd.slug === "string" ? fd.slug : "";
     if (!fdSlug) continue;
     const fdPath = getFilePath(fd, fdSlug);
@@ -155,6 +178,7 @@ export function resolveBasesEntries(
 
   for (const fileData of allFiles) {
     if ((fileData as { unlisted?: unknown }).unlisted === true) continue;
+    if (!isSourceFile(fileData)) continue;
     const slug = typeof fileData.slug === "string" ? fileData.slug : "";
     if (!slug) continue;
 

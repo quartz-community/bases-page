@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveBasesEntries } from "../src/resolver";
+import { buildSelfContext, resolveBasesEntries } from "../src/resolver";
 import type { SimpleSlug } from "@quartz-community/utils";
 import type { BasesData, BasesView, FilePath, FullSlug, QuartzPluginData } from "../src/types";
 
@@ -201,6 +201,34 @@ describe("resolveBasesEntries", () => {
     expect(visible?.formulaValues?.linkedTitle).not.toBe("Hidden Secret");
   });
 
+  it.each(["[[secret/hidden]]", "[[hidden]]", "[[hidden#h|x]]"])(
+    "unlisted pages cannot be dereferenced via a wikilink %s either",
+    (linked) => {
+      const basesData: BasesData = {
+        formulas: {
+          linkedPath: "note.linked.asFile().path",
+          linkedProps: "note.linked.asFile().properties",
+        },
+      };
+      const files = [
+        makeFile({
+          slug: "visible/page",
+          filePath: "visible/page.md",
+          frontmatter: { title: "Visible", linked },
+        }),
+        makeFile({
+          slug: "secret/hidden",
+          filePath: "secret/hidden.md",
+          frontmatter: { title: "Hidden Secret" },
+          unlisted: true,
+        }),
+      ];
+      const [visible] = resolveBasesEntries(basesData, files).entries;
+      expect(visible?.formulaValues.linkedPath).not.toBe("secret/hidden.md");
+      expect(visible?.formulaValues.linkedProps).toBeUndefined();
+    },
+  );
+
   it("evaluates formulas on entries", () => {
     const basesData: BasesData = {
       formulas: {
@@ -251,7 +279,7 @@ describe("resolveBasesEntries", () => {
     const result = resolveBasesEntries(basesData, baseFiles);
     const alpha = result.entries.find((entry) => entry.slug === "notes/alpha");
     expect(alpha?.fileProperties).toEqual({
-      name: "alpha",
+      name: "alpha.md",
       basename: "alpha",
       path: "notes/alpha.md",
       folder: "notes",
@@ -266,11 +294,21 @@ describe("resolveBasesEntries", () => {
     });
   });
 
-  it("strips .md extension from file.name", () => {
+  it("file.name keeps the extension and file.basename drops it, as in Obsidian", () => {
     const basesData: BasesData = {};
     const result = resolveBasesEntries(basesData, baseFiles);
     const alpha = result.entries.find((entry) => entry.slug === "notes/alpha");
-    expect(alpha?.fileProperties.name).toBe("alpha");
+    expect(alpha?.fileProperties.name).toBe("alpha.md");
+    expect(alpha?.fileProperties.basename).toBe("alpha");
+  });
+
+  it("filters on file.name with its extension", () => {
+    const files: QuartzPluginData[] = [
+      makeFile({ slug: "boards/plan", filePath: "boards/Plan.canvas" }),
+      makeFile({ slug: "boards/note", filePath: "boards/Note.md" }),
+    ];
+    const result = resolveBasesEntries({ filters: 'file.name == "Plan.canvas"' }, files);
+    expect(result.entries.map((e) => e.slug)).toEqual(["boards/plan"]);
   });
 
   it("keeps file.name as-is for files without extension", () => {
@@ -421,7 +459,7 @@ describe("resolveBasesEntries", () => {
     expect(halfelf?.slug).toBe("Compendium/Species/halfelf");
     const inheritances = halfelf?.formulaValues.Inheritances as Record<string, unknown>[];
     expect(inheritances).toHaveLength(1);
-    expect(inheritances[0]?.name).toBe("elf");
+    expect(inheritances[0]?.name).toBe("elf.md");
     expect(inheritances[0]?.tags).toEqual(["lineage"]);
   });
 
@@ -449,7 +487,7 @@ describe("resolveBasesEntries", () => {
     expect(result.entries).toHaveLength(1);
     const refs = result.entries[0]?.formulaValues.refs as Record<string, unknown>[];
     expect(refs).toHaveLength(1);
-    expect(refs[0]?.name).toBe("guide");
+    expect(refs[0]?.name).toBe("guide.md");
   });
 
   it("resolves short basename embeds from OFM wikilinks", () => {
@@ -557,6 +595,26 @@ describe("resolveBasesEntries", () => {
     expect(result.entries[0]?.slug).toBe("notes/alpha");
   });
 
+  it("matches wikilink-valued frontmatter against this via asFile()", () => {
+    const files = [
+      makeFile({ slug: "places/tavern", filePath: "places/tavern.md" }),
+      makeFile({ slug: "people/alice", frontmatter: { location: "[[tavern]]" } }),
+      makeFile({ slug: "people/bob", frontmatter: { location: "[[tavern|The Tavern]]" } }),
+      makeFile({ slug: "people/carol", frontmatter: { location: "[[places/tavern#Bar]]" } }),
+      makeFile({ slug: "people/dave", frontmatter: { location: "[[elsewhere]]" } }),
+    ];
+    const basesData: BasesData = { filters: "location.asFile().path == this.file.path" };
+    const selfContext = {
+      file: { name: "tavern", path: "places/tavern.md", folder: "places", ext: "md" },
+    };
+    const result = resolveBasesEntries(basesData, files, undefined, selfContext);
+    expect(result.entries.map((entry) => entry.slug)).toEqual([
+      "people/alice",
+      "people/bob",
+      "people/carol",
+    ]);
+  });
+
   it("hasProperty filter includes files with null/falsy property values", () => {
     const files = [
       makeFile({
@@ -584,5 +642,131 @@ describe("resolveBasesEntries", () => {
       "notes/with-false",
       "notes/with-null",
     ]);
+  });
+});
+
+describe("this context of a base embedded in a note", () => {
+  const people = [
+    makeFile({
+      slug: "people/alice",
+      filePath: "people/Alice.md",
+      frontmatter: { title: "Alice" },
+    }),
+    makeFile({ slug: "people/bob", filePath: "people/Bob.md", frontmatter: { title: "Bob" } }),
+    makeFile({
+      slug: "guides/solo",
+      filePath: "guides/Solo.md",
+      frontmatter: { authors: "[[Alice]]" },
+    }),
+    makeFile({
+      slug: "guides/joint",
+      filePath: "guides/Joint.md",
+      frontmatter: { authors: ["[[Alice]]", "[[Carol]]"] },
+    }),
+    makeFile({ slug: "guides/bob-notes", filePath: "guides/Bob Notes.md", links: ["people/bob"] }),
+  ];
+  const mentions: BasesData = {
+    filters: {
+      or: ["file.links.contains(this.file.asLink())", "authors.contains(this.file.asLink())"],
+    },
+  };
+  const slugsFor = (self: QuartzPluginData) =>
+    resolveBasesEntries(mentions, people, undefined, buildSelfContext(self))
+      .entries.map((entry) => entry.slug)
+      .sort();
+
+  // quartz-community/bases-page#12
+  it("resolves this.file.asLink() against each embedding note", () => {
+    expect(slugsFor(people[0]!)).toEqual(["guides/joint", "guides/solo"]);
+    expect(slugsFor(people[1]!)).toEqual(["guides/bob-notes"]);
+  });
+
+  it("exposes the embedding note as a full file value", () => {
+    const self = buildSelfContext(people[2]!);
+    expect(self.file).toMatchObject({
+      name: "Solo.md",
+      basename: "Solo",
+      path: "guides/Solo.md",
+      folder: "guides",
+      ext: "md",
+      properties: { authors: "[[Alice]]" },
+    });
+  });
+
+  // quartz-community/bases-page#19
+  it("file.inFolder(this.file.folder) in a root note matches every note", () => {
+    const home = makeFile({ slug: "index", filePath: "index.md" });
+    const result = resolveBasesEntries(
+      { filters: "file.inFolder(this.file.folder)" },
+      [home, ...people],
+      undefined,
+      buildSelfContext(home),
+    );
+    expect(result.total).toBe(people.length + 1);
+  });
+
+  // quartz-community/bases-page#20
+  it("skips virtual pages, which have no source filePath", () => {
+    const home = makeFile({ slug: "index", filePath: "index.md" });
+    const virtual = (slug: string, unlisted = false) =>
+      ({
+        slug: asFullSlug(slug),
+        relativePath: asFilePath(`${slug}.md`),
+        frontmatter: { title: slug, tags: [] },
+        ...(unlisted ? { unlisted: true } : {}),
+      }) as QuartzPluginData;
+    const files = [home, ...people, virtual("404"), virtual("tags/index"), virtual("people/index")];
+    const all = resolveBasesEntries(
+      { filters: "file.path != this.file.path" },
+      files,
+      undefined,
+      buildSelfContext(home),
+    );
+    expect(all.entries.map((entry) => entry.slug).sort()).toEqual(
+      people.map((file) => file.slug).sort(),
+    );
+    // ...and cannot be dereferenced via asFile() either
+    const linked = resolveBasesEntries(
+      { formulas: { target: '"[[404]]".asFile().properties' } },
+      files,
+    );
+    expect(linked.entries[0]?.formulaValues.target).toBeUndefined();
+  });
+
+  // Page types that render source files (canvas-page, obsidian-plugin-excalidraw) give their
+  // virtual pages the file's paths, as Quartz's parser does for notes.
+  it("lists file-backed virtual pages (.canvas, Excalidraw) as the files they stand for", () => {
+    const fileBacked = (slug: string, relativePath: string) =>
+      ({
+        slug: asFullSlug(slug),
+        filePath: asFilePath(`content/${relativePath}`),
+        relativePath: asFilePath(relativePath),
+        frontmatter: { title: slug.split("/").pop(), tags: [] },
+      }) as QuartzPluginData;
+    const files = [
+      makeFile({ slug: "boards/note", filePath: "boards/note.md" }),
+      fileBacked("boards/plan.canvas", "boards/Plan.canvas"),
+      fileBacked("boards/diagram.excalidraw", "boards/Diagram.excalidraw"),
+      fileBacked("boards/sketch.excalidraw", "boards/Sketch.excalidraw.md"),
+      fileBacked("boards/board.base", "boards/Board.base"),
+    ];
+    const result = resolveBasesEntries({ filters: 'file.inFolder("boards")' }, files);
+    expect(
+      result.entries.map(({ fileProperties: f }) => [f.name, f.path, f.ext, f.folder]),
+    ).toEqual([
+      ["note.md", "boards/note.md", "md", "boards"],
+      ["Plan.canvas", "boards/Plan.canvas", "canvas", "boards"],
+      ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
+      ["Sketch.excalidraw.md", "boards/Sketch.excalidraw.md", "md", "boards"],
+    ]);
+
+    const canvases = resolveBasesEntries({ filters: 'file.ext == "canvas"' }, files);
+    expect(canvases.entries.map((entry) => entry.slug)).toEqual(["boards/plan.canvas"]);
+
+    const linked = resolveBasesEntries(
+      { formulas: { target: '"[[boards/Plan.canvas]]".asFile().ext' } },
+      files,
+    );
+    expect(linked.entries[0]?.formulaValues.target).toBe("canvas");
   });
 });

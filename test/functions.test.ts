@@ -173,6 +173,60 @@ describe("string methods", () => {
     expect(result.basename).toBe("Apple");
     expect(result.path).toBe("Compendium/Species/Dryad/Apple.md");
   });
+
+  it.each([
+    "[[Apple]]",
+    "[[Apple|Red Apple]]",
+    "[[Apple#Lineage]]",
+    "[[Apple#Lineage|Red Apple]]",
+    " [[Apple]] ",
+  ])("resolves wikilink-wrapped value %s via _fileLookup", (link) => {
+    const lookup = new Map<string, EvalContext["file"]>();
+    lookup.set("Compendium/Species/Dryad/Apple.md", {
+      name: "Apple.md",
+      basename: "Apple",
+      path: "Compendium/Species/Dryad/Apple.md",
+      folder: "Compendium/Species/Dryad",
+      ext: "md",
+      tags: ["lineage"],
+      links: [],
+    });
+    const ctx = { ...context, _fileLookup: lookup };
+    const result = evaluate(`"${link}".asFile()`, ctx) as Record<string, unknown>;
+    expect(result.path).toBe("Compendium/Species/Dryad/Apple.md");
+  });
+
+  it("matches wikilink frontmatter against this.file via asFile()", () => {
+    const lookup = new Map<string, EvalContext["file"]>();
+    lookup.set("places/tavern.md", {
+      name: "tavern.md",
+      basename: "tavern",
+      path: "places/tavern.md",
+      folder: "places",
+      ext: "md",
+      tags: [],
+      links: [],
+    });
+    const ctx = {
+      ...context,
+      _fileLookup: lookup,
+      self: { file: { name: "tavern", path: "places/tavern.md", folder: "places", ext: "md" } },
+      note: { ...context.note, location: "[[tavern]]" },
+    };
+    expect(evaluate("location.asFile().path == this.file.path", ctx)).toBe(true);
+    expect(evaluate("location.asFile().asLink()", ctx)).toBe("[[places/tavern]]");
+  });
+
+  it.each([
+    ["[[Apple]] and [[Pear]]", "[[Apple]] and [[Pear]]"],
+    ["[[missing#h]]", "missing"],
+    ["[[missing|x]]", "missing"],
+    ["[[ ]]", "[[ ]]"],
+  ])("falls back to a skeleton for unresolvable %s with path %s", (value, path) => {
+    const ctx = { ...context, _fileLookup: new Map<string, EvalContext["file"]>() };
+    const result = evaluate(`"${value}".asFile()`, ctx) as Record<string, unknown>;
+    expect(result.path).toBe(path);
+  });
 });
 
 describe("number methods", () => {
@@ -278,6 +332,31 @@ describe("list functions and methods", () => {
       note: { ...context.note, list: ["[[Paul Chambers]]"] },
     };
     expect(evaluate("list.contains(this)", ctx)).toBe(true);
+  });
+
+  it("matches self-context heading wikilinks in list.contains", () => {
+    const ctx = {
+      ...context,
+      self: {
+        file: {
+          name: "Paul Chambers",
+          path: "artists/Paul Chambers.md",
+          folder: "artists",
+          ext: "md",
+        },
+      },
+      note: {
+        ...context.note,
+        list: ["[[Paul Chambers#Bio|Paul]]"],
+        padded: ["[[ Paul Chambers.md ]]"],
+        lowercase: ["[[paul chambers]]"],
+        other: ["[[Paul Simon]]", "[[Chambers]]"],
+      },
+    };
+    expect(evaluate("list.contains(this)", ctx)).toBe(true);
+    expect(evaluate("padded.contains(this)", ctx)).toBe(true);
+    expect(evaluate("lowercase.contains(this)", ctx)).toBe(true);
+    expect(evaluate("other.contains(this)", ctx)).toBe(false);
   });
 
   it("matches self-context bare names and path-qualified wikilinks", () => {
@@ -458,6 +537,13 @@ describe("duration and file helpers", () => {
     expect(evaluate('file.hasTag("todo")', context)).toBe(true);
     expect(evaluate('file.hasLink("other-note")', context)).toBe(true);
     expect(evaluate('file.inFolder("notes/archive")', context)).toBe(false);
+    // The content root ("" for a root note's this.file.folder, "/" in Obsidian) holds every file.
+    expect(evaluate('file.inFolder("")', context)).toBe(true);
+    expect(evaluate('file.inFolder("/")', context)).toBe(true);
+    expect(evaluate('file("index.md").inFolder("")', context)).toBe(true);
+    expect(evaluate("file.inFolder(missing)", context)).toBe(false);
+    expect(evaluate('file.inFolder("/notes/")', context)).toBe(true);
+    expect(evaluate('file.inFolder("note")', context)).toBe(false);
     expect(evaluate('file.hasProperty("status")', context)).toBe(true);
   });
 
@@ -532,6 +618,15 @@ describe("link helpers", () => {
     expect(fileWithMd).toBe("[[notes/doc]]");
   });
 
+  // Obsidian renders link("[[page#h|alias]]") as a link to page#h, without the alias.
+  it("keeps an existing wikilink's target and heading in link()", () => {
+    expect(evaluate('link("[[page]]")', context)).toBe("[[page]]");
+    expect(evaluate('link("[[page|alias]]")', context)).toBe("[[page]]");
+    expect(evaluate('link("[[page#Heading|alias]]")', context)).toBe("[[page#Heading]]");
+    expect(evaluate('link("[[page]]", "shown")', context)).toBe("[[page|shown]]");
+    expect(evaluate('"[[missing|x]]".asFile().asLink()', context)).toBe("[[missing]]");
+  });
+
   it("strips .md extension from file object path in image()", () => {
     const fileWithMd = evaluate('image(file("notes/doc.md"))', context);
     expect(fileWithMd).toBe("![[notes/doc]]");
@@ -574,5 +669,67 @@ describe("object methods", () => {
 
   it("supports values", () => {
     expect(evaluate("meta.values()", context)).toEqual(["value", 5]);
+  });
+});
+
+describe("link-valued needles (this.file.asLink())", () => {
+  const self = {
+    file: {
+      name: "Alice",
+      basename: "Alice",
+      path: "people/Alice.md",
+      folder: "people",
+      ext: "md",
+      tags: [],
+      links: [],
+    },
+  };
+  const lookup = new Map<string, EvalContext["file"]>([["people/Alice.md", self.file]]);
+  const ctx = (note: Record<string, unknown>, links: string[] = []) => ({
+    ...context,
+    self,
+    _fileLookup: lookup,
+    note,
+    file: { ...context.file, links },
+  });
+
+  it("this.file.asLink() links to the embedding note", () => {
+    expect(evaluate("this.file.asLink()", ctx({}))).toBe("[[people/Alice]]");
+  });
+
+  it("matches scalar and list link properties and resolved file links", () => {
+    expect(evaluate("authors.contains(this.file.asLink())", ctx({ authors: "[[Alice]]" }))).toBe(
+      true,
+    );
+    expect(
+      evaluate(
+        "authors.contains(this.file.asLink())",
+        ctx({ authors: ["[[Carol]]", "[[Alice]]"] }),
+      ),
+    ).toBe(true);
+    expect(evaluate("contains(authors, this.file.asLink())", ctx({ authors: ["[[Alice]]"] }))).toBe(
+      true,
+    );
+    expect(evaluate("file.links.contains(this.file.asLink())", ctx({}, ["people/alice"]))).toBe(
+      true,
+    );
+  });
+
+  it("does not match other notes", () => {
+    expect(evaluate("authors.contains(this.file.asLink())", ctx({ authors: "[[Bob]]" }))).toBe(
+      false,
+    );
+    expect(evaluate("authors.contains(this.file.asLink())", ctx({ authors: ["[[Bob]]"] }))).toBe(
+      false,
+    );
+    expect(evaluate("file.links.contains(this.file.asLink())", ctx({}, ["people/bob"]))).toBe(
+      false,
+    );
+  });
+
+  it("a missing needle matches nothing", () => {
+    expect(evaluate('"[[Alice]]".contains(missing)', ctx({}))).toBe(false);
+    expect(evaluate('contains("[[Alice]]", missing)', ctx({}))).toBe(false);
+    expect(evaluate('"hello".contains("")', ctx({}))).toBe(true);
   });
 });
