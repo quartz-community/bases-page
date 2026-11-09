@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1
+
+### Patch Changes
+
+- a87902e: A list holding a file's plain path (`refs: ["Templates.base"]`) contains that file: `refs.contains(this)` is true, as in Obsidian.
+
 ## 1.2.0
 
 ### Minor Changes
