@@ -722,4 +722,41 @@ describe("this context of a base embedded in a note", () => {
     );
     expect(linked.entries[0]?.formulaValues.target).toBeUndefined();
   });
+
+  // Page types that render source files (canvas-page, obsidian-plugin-excalidraw) give their
+  // virtual pages the file's paths, as Quartz's parser does for notes.
+  it("lists file-backed virtual pages (.canvas, Excalidraw) as the files they stand for", () => {
+    const fileBacked = (slug: string, relativePath: string) =>
+      ({
+        slug: asFullSlug(slug),
+        filePath: asFilePath(`content/${relativePath}`),
+        relativePath: asFilePath(relativePath),
+        frontmatter: { title: slug.split("/").pop(), tags: [] },
+      }) as QuartzPluginData;
+    const files = [
+      makeFile({ slug: "boards/note", filePath: "boards/note.md" }),
+      fileBacked("boards/plan.canvas", "boards/Plan.canvas"),
+      fileBacked("boards/diagram.excalidraw", "boards/Diagram.excalidraw"),
+      fileBacked("boards/sketch.excalidraw", "boards/Sketch.excalidraw.md"),
+      fileBacked("boards/board.base", "boards/Board.base"),
+    ];
+    const result = resolveBasesEntries({ filters: 'file.inFolder("boards")' }, files);
+    expect(
+      result.entries.map(({ fileProperties: f }) => [f.name, f.path, f.ext, f.folder]),
+    ).toEqual([
+      ["note", "boards/note.md", "md", "boards"],
+      ["Plan", "boards/Plan.canvas", "canvas", "boards"],
+      ["Diagram", "boards/Diagram.excalidraw", "excalidraw", "boards"],
+      ["Sketch.excalidraw", "boards/Sketch.excalidraw.md", "md", "boards"],
+    ]);
+
+    const canvases = resolveBasesEntries({ filters: 'file.ext == "canvas"' }, files);
+    expect(canvases.entries.map((entry) => entry.slug)).toEqual(["boards/plan.canvas"]);
+
+    const linked = resolveBasesEntries(
+      { formulas: { target: '"[[boards/Plan.canvas]]".asFile().ext' } },
+      files,
+    );
+    expect(linked.entries[0]?.formulaValues.target).toBe("canvas");
+  });
 });

@@ -7,10 +7,13 @@ function normalizeStringArray(values: unknown): string[] {
   return values.filter((value): value is string => typeof value === "string");
 }
 
-// Real notes carry the source `filePath` Quartz's parser sets. Virtual pages
-// (404, tag and folder listings, .base pages, …) only get a synthetic
-// `<slug>.md` relativePath; they are not notes, and Obsidian never lists them.
-function isSourceNote(fileData: QuartzPluginData): boolean {
+// Files carry a source `filePath`: Quartz's parser sets it on notes, and page
+// types that render source files (canvas-page, obsidian-plugin-excalidraw) set
+// it, with the real relativePath, on the virtual page that stands for the file.
+// Other virtual pages (404, tag and folder listings, .base pages, …) only get a
+// synthetic `<slug>.md` relativePath; they are not files, and Obsidian never
+// lists them.
+function isSourceFile(fileData: QuartzPluginData): boolean {
   return typeof fileData.filePath === "string" && fileData.filePath !== "";
 }
 
@@ -149,7 +152,7 @@ export function resolveBasesEntries(
   const fileLookup = new Map<string, EvalContext["file"]>();
   for (const fd of allFiles) {
     if ((fd as { unlisted?: unknown }).unlisted === true) continue;
-    if (!isSourceNote(fd)) continue;
+    if (!isSourceFile(fd)) continue;
     const fdSlug = typeof fd.slug === "string" ? fd.slug : "";
     if (!fdSlug) continue;
     const fdPath = getFilePath(fd, fdSlug);
@@ -174,7 +177,7 @@ export function resolveBasesEntries(
 
   for (const fileData of allFiles) {
     if ((fileData as { unlisted?: unknown }).unlisted === true) continue;
-    if (!isSourceNote(fileData)) continue;
+    if (!isSourceFile(fileData)) continue;
     const slug = typeof fileData.slug === "string" ? fileData.slug : "";
     if (!slug) continue;
 
