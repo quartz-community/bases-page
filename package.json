@@ -113,7 +113,7 @@
       "component"
     ],
     "version": "1.0.0",
-    "quartzVersion": ">=5.0.0",
+    "quartzVersion": ">=5.1.0",
     "dependencies": [],
     "defaultOrder": 50,
     "defaultEnabled": true,
