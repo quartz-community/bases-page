@@ -102,8 +102,9 @@ export function renderCellValue(
 ): ComponentChild {
   // a property holding an ISO date is a date, as in Obsidian
   const value = isTagProperty(column) ? asTags(rawValue) : coerceDateString(rawValue);
+  // as in Obsidian, an empty value is a blank cell
   if (value === null || value === undefined) {
-    return <span class="bases-empty">—</span>;
+    return <span class="bases-empty-value" />;
   }
 
   if (value instanceof ErrorValue) {

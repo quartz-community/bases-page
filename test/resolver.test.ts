@@ -84,7 +84,7 @@ describe("resolveBasesEntries", () => {
     expect(result.total).toBe(2);
   });
 
-  it("excludes .base files", () => {
+  it("lists .base files, as Obsidian does", () => {
     const basesData: BasesData = {};
     const files = [
       ...baseFiles,
@@ -95,8 +95,10 @@ describe("resolveBasesEntries", () => {
       }),
     ];
     const result = resolveBasesEntries(basesData, files);
-    expect(result.entries).toHaveLength(2);
-    expect(result.entries.find((entry) => entry.slug.endsWith(".base"))).toBeUndefined();
+    expect(result.entries).toHaveLength(3);
+    expect(
+      result.entries.find((entry) => entry.slug.endsWith(".base"))?.fileProperties,
+    ).toMatchObject({ name: "excluded.base", basename: "excluded", ext: "base" });
   });
 
   it("applies global filters", () => {
@@ -794,6 +796,7 @@ describe("this context of a base embedded in a note", () => {
       ["Plan.canvas", "boards/Plan.canvas", "canvas", "boards"],
       ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
       ["Sketch.excalidraw", "boards/Sketch.excalidraw.md", "md", "boards"],
+      ["Board.base", "boards/Board.base", "base", "boards"],
     ]);
 
     const canvases = resolveBasesEntries({ filters: 'file.ext == "canvas"' }, files);

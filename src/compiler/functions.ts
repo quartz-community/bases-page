@@ -28,6 +28,19 @@ export function getGlobalFunction(name: string): GlobalFunction | undefined {
   return globalFunctions.get(name);
 }
 
+/** The type name Obsidian uses in "Cannot find function" errors. */
+export function methodTypeName(value: unknown): string {
+  if (isDuration(value)) return "Duration";
+  if (isTagValue(value) || typeof value === "string") return "String";
+  if (isUrlValue(value)) return "Url";
+  if (typeof value === "number") return "Number";
+  if (typeof value === "boolean") return "Boolean";
+  if (value instanceof Date) return "Date";
+  if (Array.isArray(value)) return "List";
+  if (isFileValue(value)) return "File";
+  return "Object";
+}
+
 export function getMethodFunction(name: string, target: unknown): MethodFunction | undefined {
   const category = getMethodTarget(target);
   if (!category) return undefined;
@@ -254,7 +267,9 @@ function listContains(list: unknown[], needle: unknown, context: EvalContext): b
   if (needle === undefined || needle === null) return false;
   const link = resolveLink(needle, context);
   if (link) return listContainsName(list, link.name, link.path);
-  if (typeof needle === "string") {
+  // paths compare as slugs ("people/Alice" and "people/alice"); other text is exact, as in
+  // Obsidian (["Ab"].contains("ab") is false)
+  if (typeof needle === "string" && needle.includes("/")) {
     const slugNeedle = slugifyPath(needle);
     if (list.some((item) => typeof item === "string" && slugifyPath(item) === slugNeedle))
       return true;
@@ -447,7 +462,8 @@ function stringContains(target: unknown, needle: unknown, context: EvalContext):
   const needleLink = resolveLink(needle, context);
   const valueLink = needleLink ? resolveLink(value, context) : null;
   if (needleLink && valueLink && sameLinkTarget(valueLink, needleLink)) return true;
-  return value.includes(toStringValue(needle));
+  // as in Obsidian, a string contains a text ignoring case
+  return value.toLowerCase().includes(toStringValue(needle).toLowerCase());
 }
 
 registerMethodFunction("string", "contains", (target, [needle], context) =>
@@ -627,13 +643,13 @@ registerMethodFunction("file", "asLink", (target, args) => {
 });
 
 registerMethodFunction("string", "containsAll", (target, args) => {
-  const value = toStringValue(target);
-  return args.every((needle) => value.includes(toStringValue(needle)));
+  const value = toStringValue(target).toLowerCase();
+  return args.every((needle) => value.includes(toStringValue(needle).toLowerCase()));
 });
 
 registerMethodFunction("string", "containsAny", (target, args) => {
-  const value = toStringValue(target);
-  return args.some((needle) => value.includes(toStringValue(needle)));
+  const value = toStringValue(target).toLowerCase();
+  return args.some((needle) => value.includes(toStringValue(needle).toLowerCase()));
 });
 
 registerMethodFunction("string", "split", (target, [separator]) => {

@@ -249,8 +249,7 @@ export function resolveBasesEntries(
     const slug = typeof fileData.slug === "string" ? fileData.slug : "";
     if (!slug) continue;
 
-    const filePath = typeof fileData.filePath === "string" ? fileData.filePath : "";
-    if (filePath.endsWith(".base") || slug.endsWith(".base")) continue;
+    // As in Obsidian, .base files are files too: an unfiltered base lists them.
 
     const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
     const fileProperties = buildFileProperties(fileData, slug, frontmatter);

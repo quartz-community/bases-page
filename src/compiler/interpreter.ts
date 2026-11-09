@@ -1,4 +1,4 @@
-import { getGlobalFunction, getMethodFunction } from "./functions";
+import { getGlobalFunction, getMethodFunction, methodTypeName } from "./functions";
 import type { Instruction } from "./ir";
 import {
   BasesDate,
@@ -507,11 +507,7 @@ export function interpret(instructions: Instruction[], context: EvalContext): un
       case "CallGlobal": {
         const args = popArgs(stack, instruction.argc);
         const fn = getGlobalFunction(instruction.name);
-        if (!fn) {
-          stack.push(undefined);
-          ip += 1;
-          break;
-        }
+        if (!fn) throw new FormulaError(`Cannot find function "${instruction.name}"`);
         try {
           stack.push(fn(args, context));
         } catch (error) {
@@ -524,19 +520,20 @@ export function interpret(instructions: Instruction[], context: EvalContext): un
       case "CallMethod": {
         const args = popArgs(stack, instruction.argc);
         const target = stack.pop();
-        if ((target === null || target === undefined) && instruction.name === "isEmpty") {
-          stack.push(true);
+        if (target === null || target === undefined) {
+          // null.isEmpty() is true, null.isType("null") too; other methods give null
+          if (instruction.name === "isEmpty") stack.push(true);
+          else if (instruction.name === "isType") {
+            stack.push(String(args[0] ?? "").toLowerCase() === "null");
+          } else stack.push(undefined);
           ip += 1;
           break;
         }
         const fn = getMethodFunction(instruction.name, target);
         if (!fn) {
-          if (isDuration(target)) {
-            throw new FormulaError(`Cannot find function "${instruction.name}" on type Duration`);
-          }
-          stack.push(undefined);
-          ip += 1;
-          break;
+          throw new FormulaError(
+            `Cannot find function "${instruction.name}" on type ${methodTypeName(target)}`,
+          );
         }
         try {
           stack.push(fn(target, args, context));

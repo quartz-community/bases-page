@@ -136,9 +136,10 @@ describe("renderCellValue", () => {
     linkResolution: "shortest" as const,
   };
 
-  it("renders null as empty marker", () => {
+  it("renders null as a blank cell, as Obsidian does", () => {
     const result = renderCellValue(null, ctx) as { type: string; props: Record<string, unknown> };
-    expect(result.props.class).toBe("bases-empty");
+    expect(result.props.class).toBe("bases-empty-value");
+    expect(result.props.children).toBeUndefined();
   });
 
   it("renders booleans as disabled checkboxes", () => {
