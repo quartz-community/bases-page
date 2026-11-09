@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0
+
+### Minor Changes
+
+- 6ee2eda: `file.name` includes the file's extension, as in Obsidian: `Note.md`, `Plan.canvas`. Use `file.basename` for the name without it. Filters, formulas and sorting that compare `file.name` (`file.name == "Plan.canvas"`, `file.name.endsWith(".canvas")`) now give the same results as in Obsidian. **Changed:** a filter written for the old value, such as `file.name == "Note"`, needs `file.basename` instead. Tables still show the name without the extension as the link to each file.
+
+### Patch Changes
+
+- 3e6b70b: Resolve wikilink-valued strings (`[[note]]`, `[[note|alias]]`, `[[note#heading]]`) the way Obsidian does, so link-valued frontmatter such as `location: "[[note]]"` works in `asFile()`, `link()` and `list.contains(this)`. Like Obsidian, `link()` keeps a wikilink's `#heading` but not its alias, so the link text is the note's name.
+- 9cda99f: Fix `this` in bases embedded in notes and stop listing Quartz's generated pages as notes:
+
+  - `this.file` is now the full file of the note the base is embedded in, so `this.file.asLink()` works. Filters such as `file.links.contains(this.file.asLink())` and `authors.contains(this.file.asLink())` match the notes that link to the embedding note, and a link property matches whether it holds one link or a list of links. `contains()` with a missing value no longer matches every note.
+  - `file.inFolder(this.file.folder)` in a note at the content root now matches every note, as in Obsidian. `inFolder("")` and `inFolder("/")` both mean the root.
+  - Pages that Quartz generates, such as the 404 page, tag pages, the tags index and folder listings, no longer appear as notes in base views.
+
+- 584d465: Bundles `@quartz-community/utils` 1.1.0: a short wikilink to an Obsidian folder note (`[[Topic]]` for `Topic/Topic.md`) reaches the folder page, and anchors to headings use the same slug as heading ids. `github-slugger` is no longer a dependency of this plugin.
+
 ## 1.0.1
 
 ### Patch Changes
