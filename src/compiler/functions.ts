@@ -145,6 +145,8 @@ function listContainsName(list: unknown[], name: string, selfPath?: string | nul
     if (typeof value !== "string") return false;
     // A wikilink's target is matched like a bare name, so case and slug differences resolve too.
     const item = parseWikilink(value)?.target.replace(/\.md$/, "") ?? value;
+    // a plain path such as "Templates.base" names the file (Obsidian: ["Templates.base"].contains(this))
+    if (selfPath && item === selfPath) return true;
     if (item === name) return true;
     const slugItem = slugifyPath(item);
     if (slugItem === slugName || slugItem.endsWith(`/${slugName}`)) return true;
