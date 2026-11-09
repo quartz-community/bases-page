@@ -42,3 +42,10 @@ describe("other Obsidian behaviour", () => {
     expect(ev("missing.isEmpty()")).toBe(true);
   });
 });
+
+describe("file.file and objects", () => {
+  it("file.file is the file value", () => {
+    expect((ev("file.file") as { path: string }).path).toBe("probe.md");
+    expect(ev("file.file.name")).toBe("probe");
+  });
+});

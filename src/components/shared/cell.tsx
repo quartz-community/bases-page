@@ -191,7 +191,14 @@ export function renderCellValue(
         </a>
       );
     }
-    return <code>{JSON.stringify(value)}</code>;
+    // as Obsidian shows an object: its values as text
+    const shown = Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        Array.isArray(item) ? item.map(String).join(", ") : item == null ? item : String(item),
+      ]),
+    );
+    return <code>{JSON.stringify(shown)}</code>;
   }
 
   return String(value);

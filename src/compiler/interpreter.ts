@@ -306,7 +306,10 @@ export function resolvePropertyValue(path: string, context: EvalContext): unknow
     return coerceDateString(getNestedValue(context.note, trimmed.slice(5).split(".")));
   }
   if (trimmed.startsWith("file.")) {
-    return getNestedValue(context.file, trimmed.slice(5).split("."));
+    // file.file is the file itself, as in Obsidian
+    const parts = trimmed.slice(5).split(".");
+    while (parts[0] === "file") parts.shift();
+    return getNestedValue(context.file, parts);
   }
   if (trimmed.startsWith("formula.")) {
     return getNestedValue(context.formula, trimmed.slice(8).split("."));
@@ -357,7 +360,18 @@ function resolveMember(target: unknown, name: string): unknown {
     if (Number.isNaN(index)) return undefined;
     return target.charAt(index);
   }
-  if (isRecord(target)) return coerceDateString(target[name]);
+  if (isRecord(target)) {
+    // file.file is the file itself, as in Obsidian
+    if (
+      name === "file" &&
+      typeof target.path === "string" &&
+      typeof target.basename === "string" &&
+      typeof target.ext === "string"
+    ) {
+      return target;
+    }
+    return coerceDateString(target[name]);
+  }
   return undefined;
 }
 
