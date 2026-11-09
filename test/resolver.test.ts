@@ -279,7 +279,7 @@ describe("resolveBasesEntries", () => {
     const result = resolveBasesEntries(basesData, baseFiles);
     const alpha = result.entries.find((entry) => entry.slug === "notes/alpha");
     expect(alpha?.fileProperties).toEqual({
-      name: "alpha",
+      name: "alpha.md",
       basename: "alpha",
       path: "notes/alpha.md",
       folder: "notes",
@@ -294,11 +294,21 @@ describe("resolveBasesEntries", () => {
     });
   });
 
-  it("strips .md extension from file.name", () => {
+  it("file.name keeps the extension and file.basename drops it, as in Obsidian", () => {
     const basesData: BasesData = {};
     const result = resolveBasesEntries(basesData, baseFiles);
     const alpha = result.entries.find((entry) => entry.slug === "notes/alpha");
-    expect(alpha?.fileProperties.name).toBe("alpha");
+    expect(alpha?.fileProperties.name).toBe("alpha.md");
+    expect(alpha?.fileProperties.basename).toBe("alpha");
+  });
+
+  it("filters on file.name with its extension", () => {
+    const files: QuartzPluginData[] = [
+      makeFile({ slug: "boards/plan", filePath: "boards/Plan.canvas" }),
+      makeFile({ slug: "boards/note", filePath: "boards/Note.md" }),
+    ];
+    const result = resolveBasesEntries({ filters: 'file.name == "Plan.canvas"' }, files);
+    expect(result.entries.map((e) => e.slug)).toEqual(["boards/plan"]);
   });
 
   it("keeps file.name as-is for files without extension", () => {
@@ -449,7 +459,7 @@ describe("resolveBasesEntries", () => {
     expect(halfelf?.slug).toBe("Compendium/Species/halfelf");
     const inheritances = halfelf?.formulaValues.Inheritances as Record<string, unknown>[];
     expect(inheritances).toHaveLength(1);
-    expect(inheritances[0]?.name).toBe("elf");
+    expect(inheritances[0]?.name).toBe("elf.md");
     expect(inheritances[0]?.tags).toEqual(["lineage"]);
   });
 
@@ -477,7 +487,7 @@ describe("resolveBasesEntries", () => {
     expect(result.entries).toHaveLength(1);
     const refs = result.entries[0]?.formulaValues.refs as Record<string, unknown>[];
     expect(refs).toHaveLength(1);
-    expect(refs[0]?.name).toBe("guide");
+    expect(refs[0]?.name).toBe("guide.md");
   });
 
   it("resolves short basename embeds from OFM wikilinks", () => {
@@ -674,7 +684,7 @@ describe("this context of a base embedded in a note", () => {
   it("exposes the embedding note as a full file value", () => {
     const self = buildSelfContext(people[2]!);
     expect(self.file).toMatchObject({
-      name: "Solo",
+      name: "Solo.md",
       basename: "Solo",
       path: "guides/Solo.md",
       folder: "guides",
@@ -744,10 +754,10 @@ describe("this context of a base embedded in a note", () => {
     expect(
       result.entries.map(({ fileProperties: f }) => [f.name, f.path, f.ext, f.folder]),
     ).toEqual([
-      ["note", "boards/note.md", "md", "boards"],
-      ["Plan", "boards/Plan.canvas", "canvas", "boards"],
-      ["Diagram", "boards/Diagram.excalidraw", "excalidraw", "boards"],
-      ["Sketch.excalidraw", "boards/Sketch.excalidraw.md", "md", "boards"],
+      ["note.md", "boards/note.md", "md", "boards"],
+      ["Plan.canvas", "boards/Plan.canvas", "canvas", "boards"],
+      ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
+      ["Sketch.excalidraw.md", "boards/Sketch.excalidraw.md", "md", "boards"],
     ]);
 
     const canvases = resolveBasesEntries({ filters: 'file.ext == "canvas"' }, files);

@@ -62,7 +62,7 @@ export const BasesPage: QuartzPageTypePlugin<BasesPageOptions> = (opts) => ({
       const ext = dotIndex >= 0 ? filePath.slice(dotIndex + 1) : "";
       const basesSelfContext = {
         file: {
-          name: baseName,
+          name: filePath.split("/").pop() ?? baseName,
           basename: baseName,
           path: filePath,
           folder,

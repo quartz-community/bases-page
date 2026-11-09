@@ -53,8 +53,9 @@ function buildFileProperties(
 ): BasesEntry["fileProperties"] {
   const filePath = getFilePath(fileData, slug);
   const baseName = filePath ? getBaseName(filePath) : getBaseName(slug);
-  const name = baseName || slug.split("/").pop() || "Untitled";
   const basename = baseName || slug.split("/").pop() || "Untitled";
+  // as in Obsidian: file.name has the extension (`Plan.canvas`, `Note.md`), file.basename doesn't
+  const name = (filePath ? getFileName(filePath) : "") || basename;
   const lastSlash = filePath.lastIndexOf("/");
   const folder = lastSlash >= 0 ? filePath.slice(0, lastSlash) : "";
   const lastDot = filePath.lastIndexOf(".");
