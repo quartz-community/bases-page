@@ -185,6 +185,13 @@ function isDateValue(value: unknown): value is Date {
 }
 
 function applyBinary(operator: string, left: unknown, right: unknown): unknown {
+  // as in Obsidian, ordering against null is null (date("05/03/2024") > date(…) is empty)
+  if (
+    (operator === ">" || operator === "<" || operator === ">=" || operator === "<=") &&
+    (left === undefined || left === null || right === undefined || right === null)
+  ) {
+    return undefined;
+  }
   if (operator === "+" || operator === "-") {
     const sign = operator === "+" ? 1 : -1;
     if (isDateValue(left)) {

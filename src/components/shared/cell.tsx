@@ -53,6 +53,11 @@ export function formatValue(value: unknown): string {
   return String(value);
 }
 
+function isNoteProperty(column: string | undefined): boolean {
+  if (column === undefined) return false;
+  return !/^(formula|file|this)\./.test(column);
+}
+
 const TAG_PROPERTIES = new Set(["tags", "note.tags", "file.tags"]);
 
 /** `tags`, `note.tags` and `file.tags` hold tags (community PR #18). */
@@ -100,8 +105,13 @@ export function renderCellValue(
   ctx: RenderCtx,
   column?: string,
 ): ComponentChild {
-  // a property holding an ISO date is a date, as in Obsidian
-  const value = isTagProperty(column) ? asTags(rawValue) : coerceDateString(rawValue);
+  // a note property holding an ISO date is a date, as in Obsidian (formula results that are
+  // text, and file names such as a daily note's `2024-03-05`, stay text)
+  const value = isTagProperty(column)
+    ? asTags(rawValue)
+    : isNoteProperty(column)
+      ? coerceDateString(rawValue)
+      : rawValue;
   // as in Obsidian, an empty value is a blank cell
   if (value === null || value === undefined) {
     return <span class="bases-empty-value" />;

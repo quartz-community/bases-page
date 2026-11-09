@@ -21,12 +21,16 @@ const base: EvalContext = {
   formula: {},
 };
 const ev = (expression: string, locale = "en-US") => evaluate(expression, { ...base, locale });
-const shown = (value: unknown, locale = "en-US") =>
+const shown = (value: unknown, locale = "en-US", column?: string) =>
   render(
     h(
       Fragment,
       null,
-      renderCellValue(value, { slug: "x", allSlugs: [], linkResolution: "shortest", locale }),
+      renderCellValue(
+        value,
+        { slug: "x", allSlugs: [], linkResolution: "shortest", locale },
+        column,
+      ),
     ),
   ).replace(/<[^>]+>/g, "");
 
@@ -72,7 +76,8 @@ describe("date() parsing (bases-page#8)", () => {
     expect(ev("date(1709596800000)")).toEqual(
       new ErrorValue('Type error in "date", parameter "input". Expected String, given Number.'),
     );
-    expect(ev('date(s_dmy) > date("2024-01-01")')).toBe(false);
+    // ordering against null is null, as in Obsidian
+    expect(ev('date(s_dmy) > date("2024-01-01")')).toBeUndefined();
   });
 
   it("date properties are dates: fields, methods and comparisons", () => {
@@ -103,7 +108,11 @@ describe("date display and format() in the site's locale", () => {
     expect(shown(d, "zh-CN")).toBe("2024/03/05");
     expect(shown(dt, "zh-CN")).toBe("2024/03/05 14:30");
     // a raw property holding an ISO date displays as a date too
-    expect(shown("2024-03-05", "de-DE")).toBe("05.03.2024");
+    expect(shown("2024-03-05", "de-DE", "note.d")).toBe("05.03.2024");
+    expect(shown("2024-03-05", "de-DE", "d")).toBe("05.03.2024");
+    // text from a formula, and a daily note's file name, stay text
+    expect(shown("2024-03-05", "de-DE", "formula.f_iso")).toBe("2024-03-05");
+    expect(shown("2024-03-05", "de-DE", "file.name")).toBe("2024-03-05");
   });
 
   it("format() uses the locale's month and day names", () => {
