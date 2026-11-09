@@ -681,6 +681,27 @@ describe("this context of a base embedded in a note", () => {
     expect(slugsFor(people[1]!)).toEqual(["guides/bob-notes"]);
   });
 
+  // quartz-community/bases-page#23
+  it("file.hasLink(this) lists the notes linking to the embedding note", () => {
+    const linkers = [
+      ...people,
+      makeFile({ slug: "notes/a", filePath: "notes/A.md", links: ["guides/Solo"] }),
+      makeFile({ slug: "notes/b", filePath: "notes/B.md", links: ["guides/solo#Intro"] }),
+      makeFile({ slug: "notes/c", filePath: "notes/C.md", links: ["guides/joint"] }),
+    ];
+    const self = buildSelfContext(people[2]!);
+    const backlinks = (filter: string) =>
+      resolveBasesEntries({ filters: filter }, linkers, undefined, self)
+        .entries.map((entry) => entry.slug)
+        .sort();
+    // a link to one of its headings is a link to the note too
+    expect(backlinks("file.hasLink(this)")).toEqual(["notes/a", "notes/b"]);
+    expect(backlinks("file.hasLink(this.file)")).toEqual(["notes/a", "notes/b"]);
+    expect(backlinks('file.hasLink(link("guides/Solo"))')).toEqual(["notes/a", "notes/b"]);
+    expect(backlinks('file.hasLink("guides/Solo.md")')).toEqual(["notes/a", "notes/b"]);
+    expect(backlinks("file.hasLink(undefinedProperty)")).toEqual([]);
+  });
+
   it("exposes the embedding note as a full file value", () => {
     const self = buildSelfContext(people[2]!);
     expect(self.file).toMatchObject({

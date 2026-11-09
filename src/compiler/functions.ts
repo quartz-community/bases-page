@@ -441,11 +441,31 @@ registerMethodFunction("file", "hasTag", (target, args) => {
   });
 });
 
-registerMethodFunction("file", "hasLink", (target, [link]) => {
+// The slug a link points at, for comparing links written in different forms ("people/Alice",
+// "people/Alice.md", a folder note's "topic/index" and its link "topic").
+function linkSlug(path: string): string {
+  // a link to a heading or block (#…) is a link to the file
+  const file = path.trim().replace(/#.*$/, "").replace(/\/+$/, "");
+  return slugifyFilePath(file as FilePath)
+    .replace(/(^|\/)index$/, "")
+    .toLowerCase();
+}
+
+// file.hasLink(x): x is `this`, a file value (this.file), a wikilink ("[[Alice]]",
+// link("Alice")), or a path or name. As in Obsidian, the file links to that file.
+registerMethodFunction("file", "hasLink", (target, [link], context) => {
   if (!isFileValue(target)) return false;
-  const value = toStringValue(link);
-  if (!value) return false;
-  return target.links.includes(value);
+  let value: unknown = link;
+  if (isRecord(value) && isFileValue(value.file)) value = value.file;
+  let path: string;
+  if (isFileValue(value)) path = value.path;
+  else {
+    const raw = toStringValue(value);
+    if (!raw) return false;
+    path = resolveLink(raw, context)?.path ?? lookupFile(raw, context)?.path ?? raw;
+  }
+  const wanted = linkSlug(path);
+  return target.links.some((l) => linkSlug(l) === wanted);
 });
 
 registerMethodFunction("file", "inFolder", (target, [folder]) => {
