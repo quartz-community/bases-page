@@ -1,5 +1,17 @@
 import { getGlobalFunction, getMethodFunction } from "./functions";
 import type { Instruction } from "./ir";
+import {
+  BasesDate,
+  Duration,
+  ErrorValue,
+  FormulaError,
+  coerceDateString,
+  dateHasTime,
+  dateToString,
+  isDuration,
+  parseDuration,
+  parseIsoDate,
+} from "./values";
 
 export type EvalContext = {
   note: Record<string, unknown>;
@@ -55,10 +67,72 @@ function toNumber(value: unknown): number | null {
 
 function toStringValue(value: unknown): string {
   if (value === undefined || value === null) return "";
+  if (value instanceof Date) return dateToString(value);
   return String(value);
 }
 
+/** The type name Obsidian uses in its error messages. */
+export function typeName(value: unknown): string {
+  if (value === undefined || value === null) return "Null";
+  if (isDuration(value)) return "Duration";
+  if (value instanceof Date) return "Date";
+  if (typeof value === "number") return "Number";
+  if (typeof value === "string") return "String";
+  if (typeof value === "boolean") return "Boolean";
+  if (Array.isArray(value)) return "List";
+  return "Object";
+}
+
+function invalidOperator(left: unknown, right: unknown): never {
+  throw new FormulaError(`Invalid operator between ${typeName(left)} and ${typeName(right)}`);
+}
+
+// A string next to a date compares as a date when it holds one ("2024-01-01").
+function asDate(value: unknown): Date | undefined {
+  if (isDateValue(value)) return value;
+  if (typeof value === "string") return parseIsoDate(value);
+  return undefined;
+}
+
+// What a duration compares with: another duration, a duration string ("1w") or milliseconds.
+function durationMs(value: unknown): number | undefined {
+  if (isDuration(value)) return value.totalMilliseconds();
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return parseDuration(value)?.totalMilliseconds();
+  return undefined;
+}
+
+function compareNumbers(left: number, right: number, operator: string): boolean {
+  if (operator === ">") return left > right;
+  if (operator === "<") return left < right;
+  if (operator === ">=") return left >= right;
+  if (operator === "<=") return left <= right;
+  if (operator === "==") return left === right;
+  if (operator === "!=") return left !== right;
+  return false;
+}
+
+function addDuration(date: Date, duration: Duration, sign: number): BasesDate {
+  const hasTime = dateHasTime(date) || duration.ms % 86_400_000 !== 0;
+  return new BasesDate(duration.addTo(date, sign), hasTime);
+}
+
 function compareValues(left: unknown, right: unknown, operator: string): boolean {
+  if (isDuration(left) || isDuration(right)) {
+    // == only holds between two durations; <, > also take "1w" or milliseconds
+    if ((operator === "==" || operator === "!=") && !(isDuration(left) && isDuration(right))) {
+      return operator === "!=";
+    }
+    const l = durationMs(left);
+    const r = durationMs(right);
+    if (l === undefined || r === undefined) return operator === "!=";
+    return compareNumbers(l, r, operator);
+  }
+  if (isDateValue(left) || isDateValue(right)) {
+    const l = asDate(left);
+    const r = asDate(right);
+    if (l && r) return compareNumbers(l.getTime(), r.getTime(), operator);
+  }
   if (operator === "==") {
     if (isDateValue(left) && isDateValue(right)) return left.getTime() === right.getTime();
     return left === right;
@@ -100,14 +174,53 @@ function isDateValue(value: unknown): value is Date {
 }
 
 function applyBinary(operator: string, left: unknown, right: unknown): unknown {
+  if (operator === "+" || operator === "-") {
+    const sign = operator === "+" ? 1 : -1;
+    if (isDateValue(left)) {
+      if (isDuration(right)) return addDuration(left, right, sign);
+      if (typeof right === "string") {
+        // date + "1d" adds a duration; any other string is concatenated
+        const duration = parseDuration(right);
+        if (duration) return addDuration(left, duration, sign);
+        if (operator === "+") return `${toStringValue(left)}${right}`;
+      }
+      if (operator === "-" && isDateValue(right)) {
+        return Duration.fromMilliseconds(left.getTime() - right.getTime());
+      }
+      if (operator === "-" && typeof right === "string" && asDate(right)) {
+        return Duration.fromMilliseconds(left.getTime() - asDate(right)!.getTime());
+      }
+      invalidOperator(left, right);
+    }
+    if (isDuration(left)) {
+      if (isDuration(right)) return left.plus(right, sign);
+      if (operator === "+" && typeof right === "string") return `${left.toString()}${right}`;
+      if (isDateValue(right) && operator === "+") return addDuration(right, left, 1);
+      invalidOperator(left, right);
+    }
+    if (isDuration(right)) {
+      if (operator === "+" && typeof left === "string") return `${left}${right.toString()}`;
+      invalidOperator(left, right);
+    }
+    if (isDateValue(right)) {
+      if (operator === "+" && typeof left === "string") return `${left}${toStringValue(right)}`;
+      if (operator === "-" && typeof left === "string" && asDate(left)) {
+        return Duration.fromMilliseconds(asDate(left)!.getTime() - right.getTime());
+      }
+      invalidOperator(left, right);
+    }
+  }
+
+  if (operator === "*" || operator === "/") {
+    if (isDuration(left)) {
+      const factor = typeof right === "number" ? right : undefined;
+      if (factor === undefined) invalidOperator(left, right);
+      return left.scale(operator === "*" ? factor : 1 / factor);
+    }
+    if (isDuration(right)) invalidOperator(left, right);
+  }
+
   if (operator === "+") {
-    // Date + number (duration in ms) = new Date
-    if (isDateValue(left) && typeof right === "number") {
-      return new Date(left.getTime() + right);
-    }
-    if (typeof left === "number" && isDateValue(right)) {
-      return new Date(right.getTime() + left);
-    }
     if (typeof left === "string" || typeof right === "string") {
       return `${toStringValue(left)}${toStringValue(right)}`;
     }
@@ -118,14 +231,6 @@ function applyBinary(operator: string, left: unknown, right: unknown): unknown {
   }
 
   if (operator === "-") {
-    // Date - number (duration in ms) = new Date
-    if (isDateValue(left) && typeof right === "number") {
-      return new Date(left.getTime() - right);
-    }
-    // Date - Date = number (duration in ms)
-    if (isDateValue(left) && isDateValue(right)) {
-      return left.getTime() - right.getTime();
-    }
     const leftNum = toNumber(left);
     const rightNum = toNumber(right);
     if (leftNum === null || rightNum === null) return undefined;
@@ -177,10 +282,10 @@ export function resolvePropertyValue(path: string, context: EvalContext): unknow
   const trimmed = path.trim();
   if (!trimmed) return undefined;
   if (trimmed.startsWith("this.")) {
-    return getNestedValue(context.self ?? {}, trimmed.slice(5).split("."));
+    return coerceDateString(getNestedValue(context.self ?? {}, trimmed.slice(5).split(".")));
   }
   if (trimmed.startsWith("note.")) {
-    return getNestedValue(context.note, trimmed.slice(5).split("."));
+    return coerceDateString(getNestedValue(context.note, trimmed.slice(5).split(".")));
   }
   if (trimmed.startsWith("file.")) {
     return getNestedValue(context.file, trimmed.slice(5).split("."));
@@ -188,7 +293,7 @@ export function resolvePropertyValue(path: string, context: EvalContext): unknow
   if (trimmed.startsWith("formula.")) {
     return getNestedValue(context.formula, trimmed.slice(8).split("."));
   }
-  return getNestedValue(context.note, trimmed.split("."));
+  return coerceDateString(getNestedValue(context.note, trimmed.split(".")));
 }
 
 function resolveIdentifier(name: string, context: EvalContext): unknown {
@@ -198,11 +303,12 @@ function resolveIdentifier(name: string, context: EvalContext): unknown {
   if (name === "file") return context.file;
   if (name === "formula") return context.formula;
   if (name === "value") return context._lambdaValue;
-  return context.note[name];
+  return coerceDateString(context.note[name]);
 }
 
 function resolveMember(target: unknown, name: string): unknown {
   if (target === undefined || target === null) return undefined;
+  if (isDuration(target)) return target.fields[name];
   if (isDateValue(target)) {
     switch (name) {
       case "year":
@@ -233,7 +339,7 @@ function resolveMember(target: unknown, name: string): unknown {
     if (Number.isNaN(index)) return undefined;
     return target.charAt(index);
   }
-  if (isRecord(target)) return target[name];
+  if (isRecord(target)) return coerceDateString(target[name]);
   return undefined;
 }
 
@@ -333,10 +439,14 @@ export function interpret(instructions: Instruction[], context: EvalContext): un
         stack.push(resolveIdentifier(instruction.name, context));
         ip += 1;
         break;
-      case "LoadFormula":
-        stack.push(context.formula[instruction.name]);
+      case "LoadFormula": {
+        const value = context.formula[instruction.name];
+        // a formula using a failed formula fails with the same error
+        if (value instanceof ErrorValue) throw new FormulaError(value.message);
+        stack.push(value);
         ip += 1;
         break;
+      }
       case "Member": {
         const target = stack.pop();
         stack.push(resolveMember(target, instruction.name));
@@ -361,6 +471,7 @@ export function interpret(instructions: Instruction[], context: EvalContext): un
         if (instruction.operator === "!") {
           stack.push(!toBoolean(value));
         } else if (instruction.operator === "-") {
+          if (isDuration(value)) throw new FormulaError(`Unable to negate ${value.toString()}`);
           const numberValue = toNumber(value);
           stack.push(numberValue === null ? undefined : -numberValue);
         } else {
@@ -392,7 +503,8 @@ export function interpret(instructions: Instruction[], context: EvalContext): un
         }
         try {
           stack.push(fn(args, context));
-        } catch {
+        } catch (error) {
+          if (error instanceof FormulaError) throw error;
           stack.push(undefined);
         }
         ip += 1;
@@ -408,13 +520,17 @@ export function interpret(instructions: Instruction[], context: EvalContext): un
         }
         const fn = getMethodFunction(instruction.name, target);
         if (!fn) {
+          if (isDuration(target)) {
+            throw new FormulaError(`Cannot find function "${instruction.name}" on type Duration`);
+          }
           stack.push(undefined);
           ip += 1;
           break;
         }
         try {
           stack.push(fn(target, args, context));
-        } catch {
+        } catch (error) {
+          if (error instanceof FormulaError) throw error;
           stack.push(undefined);
         }
         ip += 1;

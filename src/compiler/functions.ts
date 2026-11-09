@@ -1,10 +1,18 @@
 import type { EvalContext } from "./interpreter";
 import { slugifyFilePath, slugifyPath } from "@quartz-community/utils";
 import type { FilePath } from "@quartz-community/utils";
+import {
+  BasesDate,
+  FormulaError,
+  dateToString,
+  isDuration,
+  parseDuration,
+  parseIsoDate,
+} from "./values";
 
 export type GlobalFunction = (args: unknown[], context: EvalContext) => unknown;
 export type MethodFunction = (target: unknown, args: unknown[], context: EvalContext) => unknown;
-export type MethodTarget = "string" | "number" | "date" | "list" | "file" | "object";
+export type MethodTarget = "string" | "number" | "date" | "duration" | "list" | "file" | "object";
 
 export const globalFunctions = new Map<string, GlobalFunction>();
 export const methodFunctions = new Map<MethodTarget, Map<string, MethodFunction>>();
@@ -35,6 +43,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toStringValue(value: unknown): string {
   if (value === undefined || value === null) return "";
+  if (value instanceof Date) return dateToString(value);
   return String(value);
 }
 
@@ -133,99 +142,6 @@ function isDateValue(value: unknown): value is Date {
   return value instanceof Date;
 }
 
-function isAlpha(ch: string): boolean {
-  if (!ch) return false;
-  const code = ch.charCodeAt(0);
-  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
-}
-
-function isDigit(ch: string): boolean {
-  if (!ch) return false;
-  const code = ch.charCodeAt(0);
-  return code >= 48 && code <= 57;
-}
-
-function parseDuration(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-
-  const multipliers: Record<string, number> = {
-    ms: 1,
-    millisecond: 1,
-    milliseconds: 1,
-    s: 1000,
-    sec: 1000,
-    second: 1000,
-    seconds: 1000,
-    m: 60_000,
-    min: 60_000,
-    minute: 60_000,
-    minutes: 60_000,
-    h: 3_600_000,
-    hr: 3_600_000,
-    hour: 3_600_000,
-    hours: 3_600_000,
-    d: 86_400_000,
-    day: 86_400_000,
-    days: 86_400_000,
-    w: 604_800_000,
-    week: 604_800_000,
-    weeks: 604_800_000,
-    mo: 2_592_000_000,
-    month: 2_592_000_000,
-    months: 2_592_000_000,
-    y: 31_536_000_000,
-    year: 31_536_000_000,
-    years: 31_536_000_000,
-  };
-
-  let index = 0;
-  let total = 0;
-
-  while (index < trimmed.length) {
-    while (trimmed[index] === " " || trimmed[index] === "\t") {
-      index += 1;
-    }
-    if (index >= trimmed.length) break;
-
-    const start = index;
-    let hasDot = false;
-    while (index < trimmed.length) {
-      const ch = trimmed[index] ?? "";
-      if (isDigit(ch)) {
-        index += 1;
-        continue;
-      }
-      if (ch === "." && !hasDot) {
-        hasDot = true;
-        index += 1;
-        continue;
-      }
-      break;
-    }
-
-    if (start === index) return undefined;
-    const amount = Number(trimmed.slice(start, index));
-    if (Number.isNaN(amount)) return undefined;
-
-    while (index < trimmed.length && (trimmed[index] === " " || trimmed[index] === "\t")) {
-      index += 1;
-    }
-
-    const unitStart = index;
-    while (index < trimmed.length && isAlpha(trimmed[index] ?? "")) {
-      index += 1;
-    }
-    const unit = trimmed.slice(unitStart, index).toLowerCase();
-    const multiplier = unit ? multipliers[unit] : 1;
-    if (unit && multiplier === undefined) return undefined;
-
-    total += amount * (multiplier ?? 1);
-  }
-
-  return total;
-}
-
 function parseDate(value: unknown): Date | undefined {
   if (value instanceof Date) return value;
   if (typeof value === "number") {
@@ -233,6 +149,9 @@ function parseDate(value: unknown): Date | undefined {
     return Number.isNaN(date.getTime()) ? undefined : date;
   }
   if (typeof value === "string") {
+    // as in Obsidian: date-only and zoneless strings are local time
+    const iso = parseIsoDate(value.trim());
+    if (iso) return iso;
     const parsed = Date.parse(value);
     if (Number.isNaN(parsed)) return undefined;
     return new Date(parsed);
@@ -336,7 +255,17 @@ function listContains(list: unknown[], needle: unknown, context: EvalContext): b
   return name ? listContainsName(list, name, resolveSelfPath(needle)) : false;
 }
 
+function typeNameOf(value: unknown): string {
+  if (isDuration(value)) return "Duration";
+  if (value instanceof Date) return "Date";
+  if (typeof value === "number") return "Number";
+  if (typeof value === "boolean") return "Boolean";
+  if (Array.isArray(value)) return "List";
+  return "Object";
+}
+
 function getMethodTarget(value: unknown): MethodTarget | undefined {
+  if (isDuration(value)) return "duration";
   if (typeof value === "string") return "string";
   if (typeof value === "number" && !Number.isNaN(value)) return "number";
   if (isDateValue(value)) return "date";
@@ -359,19 +288,23 @@ registerGlobalFunction("contains", ([haystack, needle], context) => {
 registerGlobalFunction("date", ([value]) => parseDate(value));
 
 registerGlobalFunction("duration", ([value]) => {
-  if (typeof value === "number") return value;
+  if (isDuration(value)) return value;
   if (typeof value === "string") return parseDuration(value);
-  return undefined;
+  if (value === undefined || value === null) return undefined;
+  throw new FormulaError(
+    `Type error in "duration", parameter "input". Expected String, given ${typeNameOf(value)}.`,
+  );
 });
 
-registerGlobalFunction("now", () => new Date());
+registerGlobalFunction("now", () => new BasesDate(Date.now(), true));
 
 registerGlobalFunction("today", () => {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return new BasesDate(new Date(now.getFullYear(), now.getMonth(), now.getDate()), false);
 });
 
 registerGlobalFunction("number", ([value]) => {
+  if (isDuration(value)) throw new FormulaError('Unable to convert "Duration" to a number.');
   const numberValue = toNumber(value);
   return numberValue === null ? undefined : numberValue;
 });
@@ -736,6 +669,8 @@ registerMethodFunction("date", "relative", (target) => {
   return diff < 0 ? "just now" : "soon";
 });
 
+registerMethodFunction("duration", "isEmpty", () => false);
+
 registerMethodFunction("date", "isEmpty", (target) => {
   if (!isDateValue(target)) return true;
   return Number.isNaN(target.getTime());
@@ -897,7 +832,15 @@ registerMethodFunction("object", "values", (target) => {
 });
 
 function registerAnyMethod(name: string, fn: MethodFunction): void {
-  const targets: MethodTarget[] = ["string", "number", "date", "list", "file", "object"];
+  const targets: MethodTarget[] = [
+    "string",
+    "number",
+    "date",
+    "duration",
+    "list",
+    "file",
+    "object",
+  ];
   for (const target of targets) {
     registerMethodFunction(target, name, fn);
   }
@@ -907,6 +850,7 @@ registerAnyMethod("isTruthy", (target) => Boolean(target));
 
 registerAnyMethod("isType", (target, [typeName]) => {
   const expected = toStringValue(typeName).toLowerCase();
+  if (isDuration(target)) return expected === "duration";
   if (typeof target === "string") return expected === "string";
   if (typeof target === "number") return expected === "number";
   if (isDateValue(target)) return expected === "date";
@@ -917,7 +861,8 @@ registerAnyMethod("isType", (target, [typeName]) => {
 });
 
 registerAnyMethod("toString", (target) => {
-  if (isDateValue(target)) return target.toISOString();
+  if (isDateValue(target)) return dateToString(target);
+  if (isDuration(target)) return target.toString();
   if (Array.isArray(target)) return target.map((item) => toStringValue(item)).join(", ");
   if (isRecord(target)) return JSON.stringify(target);
   return toStringValue(target);

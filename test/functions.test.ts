@@ -294,15 +294,15 @@ describe("date functions", () => {
   });
 
   it("supports date arithmetic", () => {
-    const oneDay = 86_400_000;
-    const result = evaluate(`eventDate + ${oneDay}`, context);
+    const result = evaluate('eventDate + "1d"', context);
     expect(result).toBeInstanceOf(Date);
     expect((result as Date).getDate()).toBe(16);
   });
 
   it("supports date subtraction", () => {
     const result = evaluate('date("2024-01-15") - date("2024-01-10")', context);
-    expect(result).toBe(5 * 86_400_000);
+    expect(evaluate('(date("2024-01-15") - date("2024-01-10")).days', context)).toBe(5);
+    expect(String(result)).toBe("5 days");
   });
 
   it("compares dates", () => {
@@ -515,22 +515,21 @@ describe("list functions and methods", () => {
 });
 
 describe("duration and file helpers", () => {
-  it("parses durations with short units", () => {
-    expect(evaluate('duration("1h")', context)).toBe(3_600_000);
-    expect(evaluate('duration("30m")', context)).toBe(1_800_000);
-  });
-
-  it("parses durations with long-form units", () => {
-    expect(evaluate('duration("1 hour")', context)).toBe(3_600_000);
-    expect(evaluate('duration("2 hours")', context)).toBe(7_200_000);
-    expect(evaluate('duration("1 day")', context)).toBe(86_400_000);
-    expect(evaluate('duration("3 days")', context)).toBe(3 * 86_400_000);
-    expect(evaluate('duration("1 week")', context)).toBe(604_800_000);
-    expect(evaluate('duration("2 weeks")', context)).toBe(2 * 604_800_000);
-    expect(evaluate('duration("1 month")', context)).toBe(2_592_000_000);
-    expect(evaluate('duration("1 year")', context)).toBe(31_536_000_000);
-    expect(evaluate('duration("30 seconds")', context)).toBe(30_000);
-    expect(evaluate('duration("5 minutes")', context)).toBe(300_000);
+  it("parses durations with short and long-form units", () => {
+    const ms = (expression: string) =>
+      (evaluate(`duration("${expression}").milliseconds`, context) as number).toFixed(0);
+    expect(ms("1h")).toBe("3600000");
+    expect(ms("30m")).toBe("1800000");
+    expect(ms("1 hour")).toBe("3600000");
+    expect(ms("2 hours")).toBe("7200000");
+    expect(ms("1 day")).toBe("86400000");
+    expect(ms("3 days")).toBe(String(3 * 86_400_000));
+    expect(ms("1 week")).toBe("604800000");
+    expect(ms("2 weeks")).toBe(String(2 * 604_800_000));
+    expect(ms("30 seconds")).toBe("30000");
+    expect(ms("5 minutes")).toBe("300000");
+    expect(evaluate('duration("1 month").months', context)).toBe(1);
+    expect(evaluate('duration("1 year").years', context)).toBe(1);
   });
 
   it("builds file objects", () => {

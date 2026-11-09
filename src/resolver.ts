@@ -1,5 +1,5 @@
 import type { BasesData, BasesEntry, BasesView, QuartzPluginData, SortEntry } from "./types";
-import { evaluate, evaluateFilter, resolvePropertyValue } from "./compiler";
+import { evaluate, evaluateFilter, isDuration, resolvePropertyValue } from "./compiler";
 import type { EvalContext } from "./compiler";
 
 function normalizeStringArray(values: unknown): string[] {
@@ -110,6 +110,8 @@ function compareSort(a: unknown, b: unknown): number {
   if (a === undefined || a === null) return 1;
   if (b === undefined || b === null) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+  if (isDuration(a) && isDuration(b)) return a.totalMilliseconds() - b.totalMilliseconds();
   const dateA = typeof a === "string" ? Date.parse(a) : NaN;
   const dateB = typeof b === "string" ? Date.parse(b) : NaN;
   if (!Number.isNaN(dateA) && !Number.isNaN(dateB)) return dateA - dateB;

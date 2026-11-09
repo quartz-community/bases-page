@@ -425,3 +425,17 @@ th.is-sorted-desc .bases-table-header-sort {
 .bases-board-card-label {
   color: var(--gray);
 }
+
+// A formula that failed shows its error, as in Obsidian.
+.bases-formula-error {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3em;
+  color: var(--secondary);
+  font-size: 0.9em;
+}
+
+.bases-formula-error-icon::before {
+  content: "⚠";
+  color: #e5a50a;
+}

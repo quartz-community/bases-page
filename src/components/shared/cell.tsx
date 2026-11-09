@@ -4,6 +4,7 @@ import type { FullSlug } from "@quartz-community/types";
 import type { BasesData, BasesEntry, BasesView } from "../../types";
 import { renderTextWithLinks } from "./links";
 import { transformLink, slugifyPath } from "@quartz-community/utils";
+import { Duration, ErrorValue } from "../../compiler/values";
 
 type RenderCtx = {
   slug: string;
@@ -31,6 +32,9 @@ function isFileValue(
 
 export function formatValue(value: unknown): string {
   if (value === undefined || value === null) return "";
+  // sortable: a duration sorts by its length
+  if (value instanceof Duration) return String(value.totalMilliseconds());
+  if (value instanceof ErrorValue) return "";
   if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
@@ -39,6 +43,20 @@ export function formatValue(value: unknown): string {
 export function renderCellValue(value: unknown, ctx: RenderCtx): ComponentChild {
   if (value === null || value === undefined) {
     return <span class="bases-empty">—</span>;
+  }
+
+  if (value instanceof ErrorValue) {
+    // as in Obsidian: the cell shows the formula's error
+    return (
+      <span class="bases-formula-error" title={value.message}>
+        <span class="bases-formula-error-icon" aria-hidden="true" />
+        <span class="bases-formula-error-message">{value.message}</span>
+      </span>
+    );
+  }
+
+  if (value instanceof Duration) {
+    return <span class="bases-duration">{value.toString()}</span>;
   }
 
   if (typeof value === "boolean") {
