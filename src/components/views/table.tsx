@@ -47,9 +47,10 @@ function renderRow(
   slug: string,
   allSlugs: string[],
   linkResolution: "absolute" | "relative" | "shortest",
+  locale?: string,
 ) {
   const transformOpts = { strategy: linkResolution, allSlugs: allSlugs as FullSlug[] };
-  const ctx = { slug, allSlugs, linkResolution };
+  const ctx = { slug, allSlugs, linkResolution, locale };
   return (
     <tr>
       {columns.map((column) => {
@@ -137,12 +138,12 @@ const TableView: ViewRenderer = ({
                     </td>
                   </tr>
                   {groupEntries.map((entry) =>
-                    renderRow(entry, columns, view, slug, allSlugs, linkResolution),
+                    renderRow(entry, columns, view, slug, allSlugs, linkResolution, locale),
                   )}
                 </>
               ))
             : entries.map((entry) =>
-                renderRow(entry, columns, view, slug, allSlugs, linkResolution),
+                renderRow(entry, columns, view, slug, allSlugs, linkResolution, locale),
               )}
         </tbody>
         {hasSummary && (

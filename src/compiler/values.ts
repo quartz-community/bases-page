@@ -450,3 +450,137 @@ export function relativeFromNow(date: Date, locale = "en", now = new Date()): st
     return diff < 0 ? `${text} ago` : `in ${text}`;
   }
 }
+
+// ---------------------------------------------------------------------------- date display
+
+function safeLocale(locale: string | undefined): string {
+  if (!locale) return "en-US";
+  try {
+    return Intl.DateTimeFormat.supportedLocalesOf([locale]).length > 0 ? locale : "en-US";
+  } catch {
+    return "en-US";
+  }
+}
+
+function intl(date: Date, locale: string, options: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat(safeLocale(locale), options).format(date);
+}
+
+/** moment's `L` in the locale: `03/05/2024` (en-US), `05.03.2024` (de), `2024/03/05` (zh). */
+export function formatDateShort(date: Date, locale = "en-US"): string {
+  return intl(date, locale, { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+/** moment's `LT`: `2:30 PM` (en-US), `14:30` (de). */
+export function formatTimeShort(date: Date, locale = "en-US"): string {
+  return intl(date, locale, { hour: "numeric", minute: "2-digit" });
+}
+
+/** How Obsidian shows a date value: `L` for a date, `L LT` for a datetime, in the site's locale. */
+export function displayDate(date: Date, locale = "en-US"): string {
+  const day = formatDateShort(date, locale);
+  return dateHasTime(date) ? `${day} ${formatTimeShort(date, locale)}` : day;
+}
+
+const FORMAT_TOKEN_RE =
+  /\[([^\]]*)\]|LLLL|LLL|LL|LTS|LT|L|YYYY|YY|MMMM|MMM|MM|Mo|M|Do|DDDD|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|A|a|ZZ|Z|X|x/g;
+
+function ordinal(n: number, locale: string): string {
+  if (!locale.toLowerCase().startsWith("en")) return `${n}.`;
+  const rem100 = n % 100;
+  if (rem100 >= 11 && rem100 <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+function zoneOffset(date: Date, separator: string): string {
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? "+" : "-";
+  const abs = Math.abs(offset);
+  return `${sign}${pad(Math.floor(abs / 60))}${separator}${pad(abs % 60)}`;
+}
+
+/** moment's `format()` with the common tokens, month and day names in the site's locale. */
+export function formatMoment(date: Date, format: string, locale = "en-US"): string {
+  const H = date.getHours();
+  return format.replace(FORMAT_TOKEN_RE, (token, escaped?: string) => {
+    if (escaped !== undefined) return escaped;
+    switch (token) {
+      case "LLLL":
+        return `${intl(date, locale, { weekday: "long", year: "numeric", month: "long", day: "numeric" })} ${formatTimeShort(date, locale)}`;
+      case "LLL":
+        return `${intl(date, locale, { dateStyle: "long" })} ${formatTimeShort(date, locale)}`;
+      case "LL":
+        return intl(date, locale, { dateStyle: "long" });
+      case "LTS":
+        return intl(date, locale, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+      case "LT":
+        return formatTimeShort(date, locale);
+      case "L":
+        return formatDateShort(date, locale);
+      case "YYYY":
+        return pad(date.getFullYear(), 4);
+      case "YY":
+        return pad(date.getFullYear() % 100);
+      case "MMMM":
+        return intl(date, locale, { month: "long" });
+      case "MMM":
+        return intl(date, locale, { month: "short" });
+      case "MM":
+        return pad(date.getMonth() + 1);
+      case "Mo":
+        return ordinal(date.getMonth() + 1, locale);
+      case "M":
+        return String(date.getMonth() + 1);
+      case "Do":
+        return ordinal(date.getDate(), locale);
+      case "DDDD": {
+        const start = new Date(date.getFullYear(), 0, 1);
+        return pad(Math.round((date.getTime() - start.getTime()) / 86_400_000) + 1, 3);
+      }
+      case "DD":
+        return pad(date.getDate());
+      case "D":
+        return String(date.getDate());
+      case "dddd":
+        return intl(date, locale, { weekday: "long" });
+      case "ddd":
+        return intl(date, locale, { weekday: "short" });
+      case "dd":
+        return intl(date, locale, { weekday: "narrow" });
+      case "d":
+        return String(date.getDay());
+      case "HH":
+        return pad(H);
+      case "H":
+        return String(H);
+      case "hh":
+        return pad(H % 12 || 12);
+      case "h":
+        return String(H % 12 || 12);
+      case "mm":
+        return pad(date.getMinutes());
+      case "m":
+        return String(date.getMinutes());
+      case "ss":
+        return pad(date.getSeconds());
+      case "s":
+        return String(date.getSeconds());
+      case "SSS":
+        return pad(date.getMilliseconds(), 3);
+      case "A":
+        return H < 12 ? "AM" : "PM";
+      case "a":
+        return H < 12 ? "am" : "pm";
+      case "ZZ":
+        return zoneOffset(date, "");
+      case "Z":
+        return zoneOffset(date, ":");
+      case "X":
+        return String(Math.floor(date.getTime() / 1000));
+      case "x":
+        return String(date.getTime());
+      default:
+        return token;
+    }
+  });
+}

@@ -205,6 +205,7 @@ export function resolveBasesEntries(
   allFiles: QuartzPluginData[],
   view?: BasesView,
   selfContext?: EvalContext["self"],
+  locale?: string,
 ): { entries: BasesEntry[]; total: number } {
   const entries: BasesEntry[] = [];
   const formulas = basesData.formulas ?? {};
@@ -253,6 +254,7 @@ export function resolveBasesEntries(
       file,
       formula: {} as Record<string, unknown>,
       self: selfContext,
+      locale,
       _fileLookup: fileLookup,
     };
 

@@ -44,6 +44,8 @@ export type EvalContext = {
       ext: string;
     };
   };
+  /** The site's locale (Quartz `configuration.locale`), for date and duration display */
+  locale?: string;
   _lambdaValue?: unknown;
   _fileLookup?: Map<string, EvalContext["file"]>;
 };

@@ -4,12 +4,21 @@ import type { FullSlug } from "@quartz-community/types";
 import type { BasesData, BasesEntry, BasesView } from "../../types";
 import { renderTextWithLinks } from "./links";
 import { transformLink, slugifyPath } from "@quartz-community/utils";
-import { Duration, ErrorValue, TagValue } from "../../compiler/values";
+import {
+  Duration,
+  ErrorValue,
+  TagValue,
+  coerceDateString,
+  displayDate,
+  humanizeDuration,
+} from "../../compiler/values";
 
 type RenderCtx = {
   slug: string;
   allSlugs: string[];
   linkResolution: "absolute" | "relative" | "shortest";
+  /** The site's locale, for dates and durations */
+  locale?: string;
 };
 
 /**
@@ -35,12 +44,15 @@ export function formatValue(value: unknown): string {
   // sortable: a duration sorts by its length
   if (value instanceof Duration) return String(value.totalMilliseconds());
   if (value instanceof ErrorValue) return "";
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString();
   if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
-export function renderCellValue(value: unknown, ctx: RenderCtx): ComponentChild {
+export function renderCellValue(rawValue: unknown, ctx: RenderCtx): ComponentChild {
+  // a property holding an ISO date is a date, as in Obsidian
+  const value = coerceDateString(rawValue);
   if (value === null || value === undefined) {
     return <span class="bases-empty">—</span>;
   }
@@ -60,7 +72,17 @@ export function renderCellValue(value: unknown, ctx: RenderCtx): ComponentChild 
   }
 
   if (value instanceof Duration) {
-    return <span class="bases-duration">{value.toString()}</span>;
+    return <span class="bases-duration">{humanizeDuration(value, ctx.locale)}</span>;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return <span class="bases-empty">—</span>;
+    // moment's `L` / `L LT` in the site's locale, as Obsidian shows dates
+    return (
+      <time class="bases-date" datetime={value.toISOString()}>
+        {displayDate(value, ctx.locale)}
+      </time>
+    );
   }
 
   if (typeof value === "boolean") {

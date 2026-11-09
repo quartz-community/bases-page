@@ -7,8 +7,10 @@ import {
   dateToString,
   isDuration,
   isTagValue,
+  formatMoment,
   parseDuration,
   parseIsoDate,
+  relativeFromNow,
 } from "./values";
 import { tagMatches } from "../tags";
 
@@ -144,21 +146,16 @@ function isDateValue(value: unknown): value is Date {
   return value instanceof Date;
 }
 
+// As in Obsidian, date() reads ISO-style strings (`2024-03-05`, `2024-03-05 14:30`,
+// `2024-03-05T14:30:00Z`) and compact `20240305`, in local time; anything else is null
+// (`05/03/2024`, `March 5, 2024`), whatever the locale.
 function parseDate(value: unknown): Date | undefined {
-  if (value instanceof Date) return value;
-  if (typeof value === "number") {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? undefined : date;
-  }
-  if (typeof value === "string") {
-    // as in Obsidian: date-only and zoneless strings are local time
-    const iso = parseIsoDate(value.trim());
-    if (iso) return iso;
-    const parsed = Date.parse(value);
-    if (Number.isNaN(parsed)) return undefined;
-    return new Date(parsed);
-  }
-  return undefined;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value;
+  if (typeof value === "string") return parseIsoDate(value);
+  if (value === undefined || value === null) return undefined;
+  throw new FormulaError(
+    `Type error in "date", parameter "input". Expected String, given ${typeNameOf(value)}.`,
+  );
 }
 
 // Obsidian keeps wikilink syntax in link-valued frontmatter ("[[Apple]]", "[[Apple|alias]]",
@@ -527,112 +524,11 @@ registerMethodFunction("number", "abs", (target) => {
   return Math.abs(value);
 });
 
-const MONTH_NAMES_SHORT = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-const MONTH_NAMES_FULL = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-function formatDateToken(date: Date, token: string): string {
-  const pad = (n: number, len = 2) => String(n).padStart(len, "0");
-  const y = date.getFullYear();
-  const M = date.getMonth() + 1;
-  const d = date.getDate();
-  const H = date.getHours();
-  const h = H % 12 || 12;
-  const m = date.getMinutes();
-  const s = date.getSeconds();
-  const A = H < 12 ? "AM" : "PM";
-
-  switch (token) {
-    case "YYYY":
-      return String(y);
-    case "YY":
-      return String(y).slice(-2);
-    case "MMMM":
-      return MONTH_NAMES_FULL[date.getMonth()]!;
-    case "MMM":
-      return MONTH_NAMES_SHORT[date.getMonth()]!;
-    case "MM":
-      return pad(M);
-    case "M":
-      return String(M);
-    case "DD":
-      return pad(d);
-    case "D":
-      return String(d);
-    case "HH":
-      return pad(H);
-    case "H":
-      return String(H);
-    case "hh":
-      return pad(h);
-    case "h":
-      return String(h);
-    case "mm":
-      return pad(m);
-    case "m":
-      return String(m);
-    case "ss":
-      return pad(s);
-    case "s":
-      return String(s);
-    case "A":
-      return A;
-    case "a":
-      return A.toLowerCase();
-    default:
-      return token;
-  }
-}
-
-function formatDate(date: Date, format: string): string {
-  const tokenPattern = /YYYY|YY|MMMM|MMM|MM|M|DD|D|HH|H|hh|h|mm|m|ss|s|A|a/g;
-  let result = "";
-  let lastIndex = 0;
-  let match = tokenPattern.exec(format);
-
-  while (match !== null) {
-    result += format.slice(lastIndex, match.index);
-    result += formatDateToken(date, match[0]);
-    lastIndex = tokenPattern.lastIndex;
-    match = tokenPattern.exec(format);
-  }
-  result += format.slice(lastIndex);
-  return result;
-}
-
-registerMethodFunction("date", "format", (target, [format]) => {
+registerMethodFunction("date", "format", (target, [format], context) => {
   if (!isDateValue(target)) return undefined;
-  const timestamp = target.getTime();
-  if (Number.isNaN(timestamp)) return "";
-  if (typeof format === "string" && format) {
-    return formatDate(target, format);
-  }
-  return target.toISOString();
+  if (Number.isNaN(target.getTime())) return "";
+  const pattern = typeof format === "string" && format ? format : "YYYY-MM-DDTHH:mm:ssZ";
+  return formatMoment(target, pattern, context.locale);
 });
 
 registerMethodFunction("date", "year", (target) =>
@@ -647,10 +543,10 @@ registerMethodFunction("date", "day", (target) =>
   isDateValue(target) ? target.getDate() : undefined,
 );
 
+// the date without its time, as a date value
 registerMethodFunction("date", "date", (target) => {
   if (!isDateValue(target)) return undefined;
-  const pad = (n: number, len = 2) => String(n).padStart(len, "0");
-  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`;
+  return new BasesDate(new Date(target.getFullYear(), target.getMonth(), target.getDate()), false);
 });
 
 registerMethodFunction("date", "time", (target) => {
@@ -659,20 +555,11 @@ registerMethodFunction("date", "time", (target) => {
   return `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`;
 });
 
-registerMethodFunction("date", "relative", (target) => {
+// moment's fromNow(): "3 years ago", "in 2 days", in the site's locale
+registerMethodFunction("date", "relative", (target, _args, context) => {
   if (!isDateValue(target)) return undefined;
-  const time = target.getTime();
-  if (Number.isNaN(time)) return "";
-  const diff = time - Date.now();
-  const abs = Math.abs(diff);
-  const minutes = Math.round(abs / 60_000);
-  const hours = Math.round(abs / 3_600_000);
-  const days = Math.round(abs / 86_400_000);
-
-  if (days >= 1) return diff < 0 ? `${days}d ago` : `in ${days}d`;
-  if (hours >= 1) return diff < 0 ? `${hours}h ago` : `in ${hours}h`;
-  if (minutes >= 1) return diff < 0 ? `${minutes}m ago` : `in ${minutes}m`;
-  return diff < 0 ? "just now" : "soon";
+  if (Number.isNaN(target.getTime())) return "";
+  return relativeFromNow(target, context.locale);
 });
 
 registerMethodFunction("duration", "isEmpty", () => false);

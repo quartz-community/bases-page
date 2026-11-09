@@ -226,7 +226,7 @@ function renderBasesInline(
 
   // Render each view panel
   const viewPanels = views.map((view, index) => {
-    const { entries, total } = resolveBasesEntries(basesData, allFiles, view, selfContext);
+    const { entries, total } = resolveBasesEntries(basesData, allFiles, view, selfContext, locale);
     const registration = viewRegistry.get(view.type);
     const Renderer = registration?.render;
     const activeClass = index === initialIndex ? " is-active" : "";

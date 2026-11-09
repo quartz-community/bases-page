@@ -42,7 +42,7 @@ const ListView: ViewRenderer = ({
       <div class="bases-list-group">
         <div class="bases-list-group-list">
           {entries.map((entry) => {
-            const ctx = { slug, allSlugs, linkResolution };
+            const ctx = { slug, allSlugs, linkResolution, locale };
             const primaryColumn = columns[0] ?? "file.name";
             const secondaryColumns = columns.slice(1);
 

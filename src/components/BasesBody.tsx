@@ -79,6 +79,7 @@ export default ((opts?: BasesPageOptions) => {
               props.allFiles,
               view,
               basesSelfContext,
+              locale,
             );
             const registration = viewRegistry.get(view.type);
             const Renderer = registration?.render;

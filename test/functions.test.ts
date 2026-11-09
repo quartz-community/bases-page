@@ -275,7 +275,7 @@ describe("date functions", () => {
   });
 
   it("provides date.date() method", () => {
-    expect(evaluate("eventDate.date()", context)).toBe("2024-01-15");
+    expect(String(evaluate("eventDate.date()", context))).toBe("2024-01-15");
   });
 
   it("formats dates with tokens", () => {
