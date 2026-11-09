@@ -75,7 +75,10 @@ export interface ViewTypeRegistration {
 
 /** Plugin options for BasesPage */
 export interface BasesPageOptions {
-  /** Default view type when none specified. Default: "table" */
+  /**
+   * Opens a .base on its first view of this type. Unset (the default), it opens on its
+   * first view, as Obsidian does.
+   */
   defaultViewType?: string;
   /**
    * Custom view renderers passed via TS config override.

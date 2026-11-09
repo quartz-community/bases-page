@@ -10,6 +10,7 @@ import { i18n } from "../i18n";
 import { registerCustomViews, viewRegistry } from "../registry";
 import { ViewSelector } from "./ViewSelector";
 import { registerBuiltinViews } from "./views";
+import { initialViewIndex } from "../views";
 import style from "./styles/bases.scss";
 // @ts-expect-error inline script import handled by esbuild plugin
 import script from "./scripts/bases.inline.ts";
@@ -44,11 +45,7 @@ export default ((opts?: BasesPageOptions) => {
       return <div class="bases-page bases-empty">{localeStrings.noViews}</div>;
     }
 
-    const preferredType = basesOptions?.defaultViewType ?? "table";
-    const initialIndex = Math.max(
-      0,
-      views.findIndex((view) => view.type === preferredType),
-    );
+    const initialIndex = initialViewIndex(views, basesOptions?.defaultViewType);
     if (!builtinViewsRegistered) {
       registerBuiltinViews();
       builtinViewsRegistered = true;

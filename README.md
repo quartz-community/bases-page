@@ -33,7 +33,6 @@ For advanced use cases (e.g. custom view renderers), you can override in TypeScr
 import * as ExternalPlugin from "./.quartz/plugins";
 
 ExternalPlugin.BasesPage({
-  defaultViewType: "table",
   linkResolution: "shortest",
   customViews: {
     myView: ({
@@ -306,11 +305,11 @@ interface EvalContext {
 
 ## Configuration Options
 
-| Option            | Type                                     | Default      | Description                                                                                    |
-| :---------------- | :--------------------------------------- | :----------- | :--------------------------------------------------------------------------------------------- |
-| `defaultViewType` | `string`                                 | `"table"`    | The default view type used when none is specified in the .base file.                           |
-| `linkResolution`  | `"absolute" \| "relative" \| "shortest"` | `"shortest"` | How to resolve internal links in view renderers. Should match your crawl-links plugin setting. |
-| `customViews`     | `Record<string, ViewRenderer>`           | `{}`         | Custom view renderers provided via TypeScript override.                                        |
+| Option            | Type                                     | Default      | Description                                                                                         |
+| :---------------- | :--------------------------------------- | :----------- | :-------------------------------------------------------------------------------------------------- |
+| `defaultViewType` | `string`                                 | unset        | Open bases on their first view of this type. Unset, a base opens on its first view, as in Obsidian. |
+| `linkResolution`  | `"absolute" \| "relative" \| "shortest"` | `"shortest"` | How to resolve internal links in view renderers. Should match your crawl-links plugin setting.      |
+| `customViews`     | `Record<string, ViewRenderer>`           | `{}`         | Custom view renderers provided via TypeScript override.                                             |
 
 ## License
 

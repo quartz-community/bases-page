@@ -37,6 +37,9 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
             else if (file.value) file.data.basesTags = extractNoteTags(String(file.value));
 
             const embeds: string[] = [];
+            // Quartz slugs an embed's #anchor; Obsidian matches the view name as written
+            const rawEmbeds = rawBaseEmbeds(typeof file.value === "string" ? file.value : "");
+            let embedIndex = 0;
 
             visit(tree, "element", (node: Element, index, parent) => {
               if (!parent || index === undefined) return;
@@ -54,7 +57,16 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
               }
 
               const block = (node.properties?.dataBlock as string) ?? "";
-              const viewName = block.startsWith("#") ? block.slice(1) : "";
+              const rawEmbed = rawEmbeds[embedIndex];
+              embedIndex += 1;
+              const rawMatches =
+                rawEmbed !== undefined &&
+                slugifyFilePath(rawEmbed.path as unknown as FilePath) === url;
+              const viewName = rawMatches
+                ? rawEmbed.view
+                : block.startsWith("#")
+                  ? block.slice(1)
+                  : "";
 
               const fullPath = join(ctx.argv.directory, baseFile);
               let raw: string;
@@ -81,6 +93,7 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
                 properties: {
                   dataQzBasesCodeblock: String(blockIndex),
                   ...(viewName ? { dataQzBasesView: viewName } : {}),
+                  ...(viewName && rawMatches ? { dataQzBasesViewExact: "true" } : {}),
                 },
                 children: [],
               };
@@ -247,6 +260,26 @@ function extractText(node: Element): string {
     }
   }
   return parts.join("");
+}
+
+/**
+ * The `.base` embeds of a note as written (`![[Tasks.base#Open tasks]]`), in order, outside
+ * code. Their view names keep case and punctuation, which the transclusion's slugged
+ * `data-block` loses.
+ */
+export function rawBaseEmbeds(source: string): { path: string; view: string }[] {
+  const prose = source
+    .replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[ \t]*$/gm, " ")
+    .replace(/`[^`\n]*`/g, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/%%[\s\S]*?%%/g, " ");
+  const embeds: { path: string; view: string }[] = [];
+  for (const match of prose.matchAll(
+    /!\[\[([^\]|#]+?\.base)\s*(?:#([^\]|]*))?(?:\|[^\]]*)?\]\]/g,
+  )) {
+    embeds.push({ path: (match[1] ?? "").trim(), view: (match[2] ?? "").trim() });
+  }
+  return embeds;
 }
 
 function buildBaseFileLookup(ctx: BuildCtx): Map<string, string> {
