@@ -81,6 +81,8 @@ function buildFileProperties(
   const ctime = toDate(dates?.created);
   const mtime = toDate(dates?.modified);
 
+  const size = fileData.text?.length;
+
   return {
     name,
     basename,
@@ -95,6 +97,7 @@ function buildFileProperties(
     modified: mtime?.toISOString(),
     ctime,
     mtime,
+    size,
   };
 }
 
