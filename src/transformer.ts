@@ -43,7 +43,9 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
 
             visit(tree, "element", (node: Element, index, parent) => {
               if (!parent || index === undefined) return;
-              if (node.tagName !== "blockquote") return;
+              // obsidian-flavored-markdown renders transclusions as <div class="transclude
+              // internal-embed markdown-embed"> since 2.3.0, <blockquote class="transclude"> before
+              if (node.tagName !== "div" && node.tagName !== "blockquote") return;
               const classes = (node.properties?.className ?? []) as string[];
               if (!classes.includes("transclude")) return;
 
