@@ -1,7 +1,12 @@
 import type { ComponentChild } from "preact";
 import type { FullSlug } from "@quartz-community/types";
 
-import type { BasesData, BasesEntry, BasesView } from "../../types";
+import type { BasesData, BasesEntry, BasesView, PropertyLabels } from "../../types";
+
+/** `priority` → `note.priority`: how Obsidian keys a note property under `properties:` */
+function qualified(column: string): string {
+  return /^(note|file|formula|this)\./.test(column) ? column : `note.${column}`;
+}
 import { isResolvedLink, renderExternalLink, renderTextWithLinks } from "./links";
 import { transformLink, slugifyPath, slugTag } from "@quartz-community/utils";
 import { renderIcon } from "./icon";
@@ -227,9 +232,22 @@ export function isEmptyValue(value: unknown): boolean {
   return false;
 }
 
-export function getColumnLabel(column: string, basesData: BasesData): string {
-  const config = basesData.properties?.[column];
+/**
+ * A column's label. As in Obsidian: the property's `displayName` if it has one, else its name
+ * (`priority` for `note.priority`, `file name` for `file.name`, `score` for `formula.score`).
+ * With `labels: "title"`, the name is title-cased instead (`Priority`, `Name`).
+ */
+export function getColumnLabel(
+  column: string,
+  basesData: BasesData,
+  labels: PropertyLabels = "name",
+): string {
+  const config = basesData.properties?.[column] ?? basesData.properties?.[qualified(column)];
   if (config?.displayName) return config.displayName;
+  if (labels === "name") {
+    if (column.startsWith("file.")) return `file ${column.slice(5)}`;
+    return column.replace(/^(note|formula)\./, "");
+  }
   const segment = column.split(".").pop() ?? column;
   return segment
     .split("_")

@@ -33,6 +33,8 @@ export interface ViewRendererProps {
   allSlugs: string[];
   /** Link resolution strategy ("absolute" | "relative" | "shortest"). Passed from plugin options. */
   linkResolution: "absolute" | "relative" | "shortest";
+  /** How property labels are shown (plugin option `propertyLabels`, default "name") */
+  propertyLabels?: PropertyLabels;
   /** Plugin-level options from the view type registration, if any. */
   options?: Record<string, unknown>;
   /** Whether the site generates tag pages (tags then link to them) */
@@ -94,7 +96,15 @@ export interface BasesPageOptions {
    * Default: "shortest"
    */
   linkResolution?: "absolute" | "relative" | "shortest";
+  /**
+   * Column and property labels: "name" (the default) shows a property's name as Obsidian does
+   * (`priority`, `file name`, `my_property`); "title" title-cases it (`Priority`, `Name`,
+   * `My Property`). A `displayName` always wins.
+   */
+  propertyLabels?: PropertyLabels;
 }
+
+export type PropertyLabels = "name" | "title";
 
 // === Sort & Filter Types ===
 

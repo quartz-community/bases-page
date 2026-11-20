@@ -268,6 +268,7 @@ function renderBasesInline(
             slug,
             allSlugs,
             linkResolution,
+            propertyLabels: opts?.propertyLabels,
             options: registration?.options,
             tagPages,
           }),

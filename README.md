@@ -20,8 +20,15 @@ plugins:
     enabled: true
     options:
       linkResolution: shortest
+      propertyLabels: name
     order: 50
 ```
+
+| Option            | Default    | Description                                                                                                                                                                                    |
+| ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `linkResolution`  | `shortest` | How internal links resolve; should match `markdownLinkResolution`.                                                                                                                             |
+| `propertyLabels`  | `name`     | Column and property labels. `name` shows a property's name as Obsidian does (`priority`, `file name`); `title` title-cases it (`Priority`, `Name`). A property's `displayName` is always used. |
+| `defaultViewType` | (none)     | Open a base on its first view of this type instead of its first view.                                                                                                                          |
 
 ## Obsidian compatibility
 
@@ -37,6 +44,7 @@ bases-page 1.2 (shipped with Quartz 5.1) evaluates bases like Obsidian. Notable 
 - `file.folder` of a file at the root of the vault is `/`.
 - `contains()`, `containsAny()` and `containsAll()` on text ignore case; on lists they are case-sensitive.
 - `this`: in a base embedded in a note, `this.<key>` and `this.file` are that note's properties and file; on the `.base` page itself, `this` is the `.base` file.
+- Columns are labelled with the property's name (`priority`, `file name`, `my_property`) unless it has a `displayName`. Set `propertyLabels: title` for title-cased labels.
 - Tags link to their tag pages (when tag-page is enabled); links to missing notes get Quartz's `broken` class.
 - A formula error (such as an unknown function) is shown in its cell.
 - With Quartz 5.1, `.base` pages follow the site's publish filters (e.g. explicit-publish, drafts): a `.base` file has no frontmatter, so with explicit-publish it is published only when a published note links to it.

@@ -71,14 +71,24 @@ describe("getColumnLabel", () => {
     expect(getColumnLabel("status", basesData)).toBe("Task Status");
   });
 
-  it("capitalizes last segment by default", () => {
+  it("is the property's name by default, as in Obsidian", () => {
     const basesData: BasesData = {};
-    expect(getColumnLabel("note.my_property", basesData)).toBe("My Property");
+    expect(getColumnLabel("note.my_property", basesData)).toBe("my_property");
+    expect(getColumnLabel("priority", basesData)).toBe("priority");
+    expect(getColumnLabel("file.name", basesData)).toBe("file name");
+    expect(getColumnLabel("formula.rnd_ok", basesData)).toBe("rnd_ok");
   });
 
-  it("handles simple names", () => {
+  it("propertyLabels: title title-cases the last segment", () => {
     const basesData: BasesData = {};
-    expect(getColumnLabel("priority", basesData)).toBe("Priority");
+    expect(getColumnLabel("note.my_property", basesData, "title")).toBe("My Property");
+    expect(getColumnLabel("file.name", basesData, "title")).toBe("Name");
+  });
+
+  it("a displayName under note.<key> labels the bare column too", () => {
+    const basesData: BasesData = { properties: { "note.score": { displayName: "Points" } } };
+    expect(getColumnLabel("score", basesData)).toBe("Points");
+    expect(getColumnLabel("note.score", basesData, "title")).toBe("Points");
   });
 });
 

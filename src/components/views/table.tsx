@@ -75,6 +75,7 @@ const TableView: ViewRenderer = ({
   allSlugs,
   linkResolution,
   tagPages,
+  propertyLabels,
 }) => {
   const columns = getColumns(view, basesData, entries);
   const summaries = view.summaries ?? {};
@@ -101,7 +102,9 @@ const TableView: ViewRenderer = ({
       );
     });
   const groupProperty = view.groupBy?.property;
-  const groupPropertyLabel = groupProperty ? getColumnLabel(groupProperty, basesData) : "";
+  const groupPropertyLabel = groupProperty
+    ? getColumnLabel(groupProperty, basesData, propertyLabels)
+    : "";
   const groups = groupViewEntries(entries, view, localeStrings.uncategorized);
   // rowHeight: Obsidian's row heights (short, the default, is one line)
   const rowHeight = ROW_HEIGHTS[String(view.rowHeight ?? "")];
@@ -129,7 +132,9 @@ const TableView: ViewRenderer = ({
                 : undefined;
               return (
                 <th data-column={column} data-sortable="true" style={style}>
-                  <span class="bases-table-header">{getColumnLabel(column, basesData)}</span>
+                  <span class="bases-table-header">
+                    {getColumnLabel(column, basesData, propertyLabels)}
+                  </span>
                   <span class="bases-table-header-sort" aria-hidden="true" />
                 </th>
               );

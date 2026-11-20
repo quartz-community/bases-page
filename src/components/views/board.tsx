@@ -30,6 +30,7 @@ const BoardView: ViewRenderer = ({
   allSlugs,
   linkResolution,
   tagPages,
+  propertyLabels,
 }) => {
   const localeStrings = i18n(locale).components.bases;
   const groupProperty = view.groupBy?.property ?? view.boardProperty;
@@ -102,7 +103,7 @@ const BoardView: ViewRenderer = ({
                           return (
                             <div class="bases-board-card-row">
                               <span class="bases-board-card-label">
-                                {getColumnLabel(column, basesData)}
+                                {getColumnLabel(column, basesData, propertyLabels)}
                               </span>
                               <span class="bases-board-card-value">
                                 {renderCellValue(value, ctx, column)}

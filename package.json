@@ -119,7 +119,8 @@
     "defaultOrder": 50,
     "defaultEnabled": true,
     "defaultOptions": {
-      "linkResolution": "shortest"
+      "linkResolution": "shortest",
+      "propertyLabels": "name"
     },
     "optionSchema": {
       "defaultViewType": {
@@ -131,6 +132,13 @@
           "absolute",
           "relative",
           "shortest"
+        ]
+      },
+      "propertyLabels": {
+        "type": "enum",
+        "values": [
+          "name",
+          "title"
         ]
       }
     }

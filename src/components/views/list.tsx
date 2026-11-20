@@ -29,6 +29,7 @@ const ListView: ViewRenderer = ({
   allSlugs,
   linkResolution,
   tagPages,
+  propertyLabels,
 }) => {
   const columns = getColumns(view, basesData, entries);
   const localeStrings = i18n(locale).components.bases;
@@ -116,7 +117,9 @@ const ListView: ViewRenderer = ({
           <div class="bases-list-group">
             <div class="bases-group-heading">
               {groupProperty && (
-                <span class="bases-group-property">{getColumnLabel(groupProperty, basesData)}</span>
+                <span class="bases-group-property">
+                  {getColumnLabel(groupProperty, basesData, propertyLabels)}
+                </span>
               )}
               <span class="bases-group-value">{group.label}</span>
             </div>
