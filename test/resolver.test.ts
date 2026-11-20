@@ -988,8 +988,10 @@ describe("file.links, file.backlinks and file.properties as in Obsidian", () => 
       "projects/alpha",
     ]);
     // shown as the linked notes
-    expect((a?.linkedFiles?.links?.[0] as { name: string }).name).toBe("Beta");
-    expect((b?.linkedFiles?.backlinks?.[0] as { name: string }).name).toBe("Alpha");
+    expect((a?.linkedFiles?.["file.links"]?.[0] as { name: string }).name).toBe("Beta");
+    expect((b?.linkedFiles?.["file.backlinks"]?.[0] as { name: string }).name).toBe("Alpha");
+    // a formula that is one of those lists shows the same way
+    expect((a?.linkedFiles?.["formula.l"]?.[0] as { name: string }).name).toBe("Beta");
   });
 
   it("file.properties holds the frontmatter as written, not what Quartz adds", () => {

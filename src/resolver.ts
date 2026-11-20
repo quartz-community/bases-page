@@ -324,20 +324,26 @@ export function resolveBasesEntries(
         ? frontmatter.title
         : fileProperties.basename || slug.split("/").pop() || "Untitled";
 
-    // as files, for display (by name, as in Obsidian)
+    // as files, for display (by name, as in Obsidian): the file.links, file.backlinks and
+    // file.embeds columns, and formulas that are one of those lists
     const asFiles = (slugs: string[] | undefined) =>
       (slugs ?? []).map((target) => fileLookup.get(target) ?? target);
+    const linkedFiles: Record<string, unknown[]> = {};
+    for (const key of ["links", "backlinks", "embeds"] as const) {
+      const list = file[key];
+      if (!Array.isArray(list)) continue;
+      linkedFiles[`file.${key}`] = asFiles(list);
+      for (const [name, value] of Object.entries(context.formula)) {
+        if (value === list) linkedFiles[`formula.${name}`] = linkedFiles[`file.${key}`]!;
+      }
+    }
     entries.push({
       slug,
       title,
       properties,
       fileProperties,
       formulaValues: context.formula,
-      linkedFiles: {
-        links: asFiles(fileProperties.links),
-        backlinks: asFiles(fileProperties.backlinks),
-        embeds: asFiles(fileProperties.embeds),
-      },
+      linkedFiles,
     });
   }
 

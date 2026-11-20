@@ -281,12 +281,10 @@ export function resolveEntryPropertyValue(column: string, entry: BasesEntry): un
   if (column.startsWith("note.")) {
     return getNestedValue(entry.properties, column.slice(5).split("."));
   }
+  const linked = entry.linkedFiles?.[column];
+  if (linked) return linked;
   if (column.startsWith("file.")) {
-    const key = column.slice(5);
-    if ((key === "links" || key === "backlinks" || key === "embeds") && entry.linkedFiles?.[key]) {
-      return entry.linkedFiles[key];
-    }
-    return getNestedValue(entry.fileProperties, key.split("."));
+    return getNestedValue(entry.fileProperties, column.slice(5).split("."));
   }
   if (column.startsWith("formula.")) {
     return getNestedValue(entry.formulaValues, column.slice(8).split("."));

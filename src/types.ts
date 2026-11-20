@@ -249,8 +249,8 @@ export interface BasesEntry {
   /** Computed formula values */
   formulaValues: Record<string, unknown>;
   /**
-   * file.links, file.backlinks and file.embeds as files (unresolved ones as their slug), for
-   * display: Obsidian shows the linked notes by name
+   * By column (`file.links`, `formula.x`): file.links, file.backlinks and file.embeds as files
+   * (unresolved ones as their slug), for display: Obsidian shows the linked notes by name
    */
-  linkedFiles?: Partial<Record<"links" | "backlinks" | "embeds", unknown[]>>;
+  linkedFiles?: Record<string, unknown[]>;
 }
