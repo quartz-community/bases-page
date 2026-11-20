@@ -51,12 +51,29 @@ describe("lex", () => {
     expect(tokens[9]?.value).toBe("foo123");
   });
 
+  it("tokenizes regular expressions where a value is expected", () => {
+    const tokens = lex("/a[/]b\\//gi.matches(x) / 2");
+    expect(tokens.map((token) => [token.type, token.value])).toEqual([
+      [TokenType.Regex, "gi/a[/]b\\/"],
+      [TokenType.Dot, "."],
+      [TokenType.Identifier, "matches"],
+      [TokenType.LeftParen, "("],
+      [TokenType.Identifier, "x"],
+      [TokenType.RightParen, ")"],
+      [TokenType.Slash, "/"],
+      [TokenType.Number, "2"],
+      [TokenType.EOF, ""],
+    ]);
+  });
+
   it("tokenizes operators", () => {
-    const tokens = lex("+ - * / % == != > < >= <= && || ! .");
+    // after a value, / is division (a regular expression where a value is expected)
+    const tokens = lex("+ - * a / % == != > < >= <= && || ! .");
     expect(tokens.map((token) => token.type)).toEqual([
       TokenType.Plus,
       TokenType.Minus,
       TokenType.Star,
+      TokenType.Identifier,
       TokenType.Slash,
       TokenType.Percent,
       TokenType.EqualsEquals,

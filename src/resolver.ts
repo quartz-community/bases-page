@@ -2,6 +2,8 @@ import type { BasesData, BasesEntry, BasesView, QuartzPluginData, SortEntry } fr
 import { evaluate, evaluateFilter, isDuration, resolvePropertyValue } from "./compiler";
 import type { EvalContext } from "./compiler";
 import { TagValue } from "./compiler/values";
+import { statSync } from "fs";
+import { slugTag } from "@quartz-community/utils";
 import { withHash } from "./tags";
 import type { NoteTags } from "./tags";
 
@@ -58,6 +60,17 @@ function toDate(value: unknown): Date | undefined {
   return undefined;
 }
 
+/** file.size: the source file's size in bytes, as in Obsidian. */
+function fileSize(fileData: QuartzPluginData): number | undefined {
+  const source = fileData.filePath;
+  if (typeof source !== "string" || !source) return undefined;
+  try {
+    return statSync(source).size;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildFileProperties(
   fileData: QuartzPluginData,
   slug: string,
@@ -74,7 +87,11 @@ function buildFileProperties(
   const ext = lastDot > 0 ? fullname.slice(lastDot + 1) : "";
   const name = fileNameFor(fullname, basename, ext);
   const tags = noteTags(fileData)?.file ?? normalizeStringArray(frontmatter.tags).map(withHash);
-  const links = normalizeStringArray(fileData.links ?? fileData.outgoingLinks);
+  // Quartz lists a note's tags among its links (to their tag pages); Obsidian doesn't
+  const tagPages = new Set(tags.map((tag) => `tags/${slugTag(tag.replace(/^#/, ""))}`));
+  const links = normalizeStringArray(fileData.links ?? fileData.outgoingLinks).filter(
+    (link) => !tagPages.has(link),
+  );
   const embeds = normalizeStringArray(fileData.embeds);
 
   const dates = fileData.dates as Record<string, unknown> | undefined;
@@ -95,6 +112,7 @@ function buildFileProperties(
     modified: mtime?.toISOString(),
     ctime,
     mtime,
+    size: fileSize(fileData),
   };
 }
 
@@ -111,9 +129,14 @@ function noteTags(fileData: QuartzPluginData): NoteTags | undefined {
  */
 export function noteProperties(fileData: QuartzPluginData): Record<string, unknown> {
   const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
+  // only the properties the note's frontmatter has: Quartz adds `title` and dates
+  const keys = (fileData as { basesPropertyKeys?: unknown }).basesPropertyKeys;
+  const written = Array.isArray(keys)
+    ? Object.fromEntries(Object.entries(frontmatter).filter(([key]) => keys.includes(key)))
+    : frontmatter;
   const tags = noteTags(fileData);
-  if (!tags) return frontmatter;
-  const properties: Record<string, unknown> = { ...frontmatter };
+  if (!tags) return written;
+  const properties: Record<string, unknown> = { ...written };
   if (tags.note) properties.tags = tags.note;
   else delete properties.tags;
   return properties;
@@ -172,20 +195,26 @@ function compareSort(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b));
 }
 
+// As in Obsidian, entries without a sort are in file name order. `order` only lists the
+// columns: it doesn't sort.
+const BY_FILE_NAME: SortEntry[] = [
+  { property: "file.name", direction: "ASC" },
+  { property: "file.path", direction: "ASC" },
+];
+
 function buildSortKeys(view?: BasesView): SortEntry[] {
-  if (view?.sort && view.sort.length > 0) return view.sort;
+  if (view?.sort && view.sort.length > 0) return [...view.sort, ...BY_FILE_NAME];
   if (view?.groupBy?.property) {
-    return [{ property: view.groupBy.property, direction: view.groupBy.direction ?? "ASC" }];
+    return [
+      { property: view.groupBy.property, direction: view.groupBy.direction ?? "ASC" },
+      ...BY_FILE_NAME,
+    ];
   }
-  if (view?.order && view.order.length > 0) {
-    return view.order.map((property) => ({ property, direction: "ASC" as const }));
-  }
-  return [];
+  return BY_FILE_NAME;
 }
 
 function sortEntries(entries: BasesEntry[], view?: BasesView): BasesEntry[] {
   const sortKeys = buildSortKeys(view);
-  if (sortKeys.length === 0) return entries;
 
   return [...entries].sort((left, right) => {
     for (const key of sortKeys) {
@@ -217,6 +246,20 @@ export function resolveBasesEntries(
   const entries: BasesEntry[] = [];
   const formulas = basesData.formulas ?? {};
 
+  // file.backlinks: the notes linking to each slug
+  const backlinks = new Map<string, string[]>();
+  for (const fd of allFiles) {
+    if ((fd as { unlisted?: unknown }).unlisted === true) continue;
+    const source = typeof fd.slug === "string" ? fd.slug : "";
+    // a base's page links to its entries, but a .base file links nothing (in Obsidian)
+    if (!source || source.endsWith(".base")) continue;
+    for (const target of new Set(normalizeStringArray(fd.links))) {
+      const list = backlinks.get(target) ?? [];
+      list.push(source);
+      backlinks.set(target, list);
+    }
+  }
+
   const fileLookup = new Map<string, EvalContext["file"]>();
   for (const fd of allFiles) {
     if ((fd as { unlisted?: unknown }).unlisted === true) continue;
@@ -226,6 +269,7 @@ export function resolveBasesEntries(
     const fdPath = getFilePath(fd, fdSlug);
     const fm = (fd.frontmatter ?? {}) as Record<string, unknown>;
     const fp = buildFileProperties(fd, fdSlug, fm);
+    fp.backlinks = backlinks.get(fdSlug) ?? [];
     const fileValue: EvalContext["file"] = evalFile(fp, noteProperties(fd));
 
     fileLookup.set(fdPath, fileValue);
@@ -253,6 +297,7 @@ export function resolveBasesEntries(
 
     const frontmatter = (fileData.frontmatter ?? {}) as Record<string, unknown>;
     const fileProperties = buildFileProperties(fileData, slug, frontmatter);
+    fileProperties.backlinks = backlinks.get(slug) ?? [];
     const properties = noteProperties(fileData);
     const file = evalFile(fileProperties, properties);
     const context = {
@@ -279,12 +324,26 @@ export function resolveBasesEntries(
         ? frontmatter.title
         : fileProperties.basename || slug.split("/").pop() || "Untitled";
 
+    // as files, for display (by name, as in Obsidian): the file.links, file.backlinks and
+    // file.embeds columns, and formulas that are one of those lists
+    const asFiles = (slugs: string[] | undefined) =>
+      (slugs ?? []).map((target) => fileLookup.get(target) ?? target);
+    const linkedFiles: Record<string, unknown[]> = {};
+    for (const key of ["links", "backlinks", "embeds"] as const) {
+      const list = file[key];
+      if (!Array.isArray(list)) continue;
+      linkedFiles[`file.${key}`] = asFiles(list);
+      for (const [name, value] of Object.entries(context.formula)) {
+        if (value === list) linkedFiles[`formula.${name}`] = linkedFiles[`file.${key}`]!;
+      }
+    }
     entries.push({
       slug,
       title,
       properties,
       fileProperties,
       formulaValues: context.formula,
+      linkedFiles,
     });
   }
 

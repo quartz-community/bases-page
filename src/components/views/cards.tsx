@@ -8,6 +8,9 @@ import {
   resolveEntryPropertyValue,
 } from "../shared/cell";
 import { transformLink } from "@quartz-community/utils";
+import { resolveImageSrc } from "../shared/image";
+import { groupViewEntries } from "../shared/group";
+import type { ResolveImageOpts } from "../shared/image";
 
 function formatMessage(template: string, values: Record<string, string | number>): string {
   return Object.entries(values).reduce(
@@ -16,37 +19,8 @@ function formatMessage(template: string, values: Record<string, string | number>
   );
 }
 
-const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}){1,2}$/i;
-const WIKILINK_RE = /^\[\[(.+?)(?:\|.*)?\]\]$/;
-
-export interface ResolveImageOpts {
-  slug: string;
-  allSlugs: string[];
-  linkResolution: "absolute" | "relative" | "shortest";
-}
-
-export function resolveImageSrc(
-  raw: string,
-  opts: ResolveImageOpts,
-): { src: string; isColor: boolean } {
-  if (!raw) return { src: "", isColor: false };
-
-  if (HEX_COLOR_RE.test(raw)) {
-    return { src: raw, isColor: true };
-  }
-
-  const wikiMatch = WIKILINK_RE.exec(raw);
-  if (wikiMatch?.[1]) {
-    const target = wikiMatch[1].trim();
-    const resolved = transformLink(opts.slug as FullSlug, target, {
-      strategy: opts.linkResolution,
-      allSlugs: opts.allSlugs as FullSlug[],
-    });
-    return { src: String(resolved), isColor: false };
-  }
-
-  return { src: raw, isColor: false };
-}
+export { resolveImageSrc } from "../shared/image";
+export type { ResolveImageOpts } from "../shared/image";
 
 /** Obsidian's `imageAspectRatio` is height / width (0.5 is a wide cover); the default is 1. */
 export function coverAspectRatio(view: {
@@ -58,7 +32,8 @@ export function coverAspectRatio(view: {
   return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
 }
 
-function cssUrl(src: string): string {
+/** A CSS `url()` for `src`. */
+export function cssUrl(src: string): string {
   return `url("${src.replace(/["\\\n]/g, (ch) => `\\${ch === "\n" ? "a " : ch}`)}")`;
 }
 
@@ -92,6 +67,8 @@ const CardsView: ViewRenderer = ({
       : undefined;
   const imageOpts: ResolveImageOpts = { slug, allSlugs, linkResolution };
   const transformOpts = { strategy: linkResolution, allSlugs: allSlugs as FullSlug[] };
+  const groups = groupViewEntries(entries, view, localeStrings.uncategorized);
+  const groupProperty = view.groupBy?.property;
 
   return (
     <div class="bases-cards-wrapper">
@@ -101,74 +78,87 @@ const CardsView: ViewRenderer = ({
           total,
         })}
       </div>
-      <div class="bases-cards" style={gridStyle}>
-        {entries.map((entry) => {
-          const ctx = { slug, allSlugs, linkResolution, locale, tagPages };
-          const imageValue = imageProperty
-            ? resolveEntryPropertyValue(imageProperty, entry)
-            : undefined;
-          const rawImage = imageValue ? String(imageValue) : "";
-          const { src: imageSrc, isColor } = resolveImageSrc(rawImage, imageOpts);
-          const href = transformLink(slug as FullSlug, entry.slug, transformOpts);
-          const name = entry.fileProperties.name || entry.title;
-          const hasTitle = columns.includes("file.name");
-          // A view with an image property gives every card a cover, empty if the note has no image
-          const coverStyle: Record<string, string> = { aspectRatio };
-          if (imageSrc && isColor) coverStyle.backgroundColor = imageSrc;
-          else if (imageSrc) {
-            coverStyle.backgroundImage = cssUrl(imageSrc);
-            coverStyle.backgroundSize = imageFit;
-          }
-          return (
-            <div class="bases-card" data-slug={entry.slug}>
-              {imageProperty && (
-                <div
-                  class={`bases-card-cover${imageSrc ? "" : " is-empty"}`}
-                  style={coverStyle}
-                  role={imageSrc && !isColor ? "img" : undefined}
-                  aria-label={imageSrc && !isColor ? name : undefined}
-                />
+      {(groups ?? [null]).map((group) => (
+        <>
+          {group && (
+            // as in Obsidian, a grouped cards view has a heading per group
+            <div class="bases-group-heading">
+              {groupProperty && (
+                <span class="bases-group-property">{getColumnLabel(groupProperty, basesData)}</span>
               )}
-              {!hasTitle && (
-                <a
-                  href={href}
-                  class="internal bases-card-link"
-                  data-slug={entry.slug}
-                  aria-label={name}
-                />
-              )}
-              <div class="bases-card-body">
-                {columns.map((column) => {
-                  if (column === "file.name") {
-                    return (
-                      <a
-                        href={href}
-                        class="internal bases-card-title bases-card-link"
-                        data-slug={entry.slug}
-                      >
-                        {name}
-                      </a>
-                    );
-                  }
-                  const value = resolveEntryPropertyValue(column, entry);
-                  return (
-                    <div class="bases-card-row" data-property={column}>
-                      <span class="bases-card-label">{getColumnLabel(column, basesData)}</span>
-                      <span class="bases-card-value">
-                        {isEmptyValue(value) ? (
-                          <span class="bases-empty-value">—</span>
-                        ) : (
-                          renderCellValue(value, ctx, column)
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <span class="bases-group-value">{group.label}</span>
             </div>
-          );
-        })}
-      </div>
+          )}
+          <div class="bases-cards" style={gridStyle}>
+            {(group ? group.entries : entries).map((entry) => {
+              const ctx = { slug, allSlugs, linkResolution, locale, tagPages };
+              const imageValue = imageProperty
+                ? resolveEntryPropertyValue(imageProperty, entry)
+                : undefined;
+              const rawImage = imageValue ? String(imageValue) : "";
+              const { src: imageSrc, isColor } = resolveImageSrc(rawImage, imageOpts);
+              const href = transformLink(slug as FullSlug, entry.slug, transformOpts);
+              const name = entry.fileProperties.name || entry.title;
+              const hasTitle = columns.includes("file.name");
+              // A view with an image property gives every card a cover, empty if the note has no image
+              const coverStyle: Record<string, string> = { aspectRatio };
+              if (imageSrc && isColor) coverStyle.backgroundColor = imageSrc;
+              else if (imageSrc) {
+                coverStyle.backgroundImage = cssUrl(imageSrc);
+                coverStyle.backgroundSize = imageFit;
+              }
+              return (
+                <div class="bases-card" data-slug={entry.slug}>
+                  {imageProperty && (
+                    <div
+                      class={`bases-card-cover${imageSrc ? "" : " is-empty"}`}
+                      style={coverStyle}
+                      role={imageSrc && !isColor ? "img" : undefined}
+                      aria-label={imageSrc && !isColor ? name : undefined}
+                    />
+                  )}
+                  {!hasTitle && (
+                    <a
+                      href={href}
+                      class="internal bases-card-link"
+                      data-slug={entry.slug}
+                      aria-label={name}
+                    />
+                  )}
+                  <div class="bases-card-body">
+                    {columns.map((column) => {
+                      if (column === "file.name") {
+                        return (
+                          <a
+                            href={href}
+                            class="internal bases-card-title bases-card-link"
+                            data-slug={entry.slug}
+                          >
+                            {name}
+                          </a>
+                        );
+                      }
+                      const value = resolveEntryPropertyValue(column, entry);
+                      return (
+                        <div class="bases-card-row" data-property={column}>
+                          <span class="bases-card-label">{getColumnLabel(column, basesData)}</span>
+                          <span class="bases-card-value">
+                            {isEmptyValue(value) ? (
+                              <span class="bases-empty-value">—</span>
+                            ) : (
+                              renderCellValue(value, ctx, column)
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ))}
     </div>
   );
 };

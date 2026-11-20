@@ -129,10 +129,26 @@ th.is-sorted-desc .bases-table-header-sort {
   transform: rotate(135deg);
 }
 
+// rowHeight: medium, tall or extra rows, as in Obsidian (text wraps, top aligned)
+.bases-table[data-row-height] tbody tr:not(.bases-table-group-header):not(.bases-summary-row) td {
+  height: var(--bases-table-row-height);
+  vertical-align: top;
+}
+
 .bases-summary-row td {
   background: var(--light);
-  font-weight: 600;
   color: var(--darkgray);
+}
+
+// as in Obsidian: the summary's name in small muted text, then its value
+
+.bases-summary-name {
+  font-size: 0.8em;
+  color: var(--gray);
+}
+
+.bases-summary-value {
+  font-weight: 600;
 }
 
 .bases-table-group-header td {
@@ -200,9 +216,40 @@ th.is-sorted-desc .bases-table-header-sort {
   gap: 4px;
 }
 
-.list-bullet {
+.list-bullet,
+.list-number {
   color: var(--darkgray);
   user-select: none;
+}
+
+.list-number {
+  font-variant-numeric: tabular-nums;
+}
+
+// indentProperties: the properties after the first, one per line under it
+.bases-list-item-properties.nested {
+  flex-direction: column;
+  align-items: flex-start;
+  padding-left: 1.25em;
+}
+
+// a grouped list or cards view: the group's property and value
+.bases-group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5em;
+  margin: 1rem 0 0.4rem;
+  font-weight: 600;
+
+  &:first-of-type {
+    margin-top: 0.25rem;
+  }
+}
+
+.bases-group-property {
+  color: var(--gray);
+  font-size: 0.85em;
+  font-weight: 400;
 }
 
 .bases-list-separator {
@@ -423,6 +470,13 @@ a.bases-card-link {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.bases-board-card-cover {
+  margin: -10px -12px 2px;
+  border-radius: 10px 10px 0 0;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .bases-board-card {

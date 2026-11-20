@@ -4,9 +4,14 @@ import type { FullSlug } from "@quartz-community/types";
 import type { BasesData, BasesEntry, BasesView } from "../../types";
 import { isResolvedLink, renderExternalLink, renderTextWithLinks } from "./links";
 import { transformLink, slugifyPath, slugTag } from "@quartz-community/utils";
+import { renderIcon } from "./icon";
+import { resolveImageSrc } from "./image";
 import {
   Duration,
   ErrorValue,
+  HtmlValue,
+  IconValue,
+  ImageValue,
   TagValue,
   UrlValue,
   coerceDateString,
@@ -47,13 +52,15 @@ export function formatValue(value: unknown): string {
   // sortable: a duration sorts by its length
   if (value instanceof Duration) return String(value.totalMilliseconds());
   if (value instanceof ErrorValue) return "";
+  if (value instanceof HtmlValue || value instanceof ImageValue || value instanceof IconValue)
+    return value.toString();
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString();
   if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
-function isNoteProperty(column: string | undefined): boolean {
+export function isNoteProperty(column: string | undefined): boolean {
   if (column === undefined) return false;
   return !/^(formula|file|this)\./.test(column);
 }
@@ -130,6 +137,16 @@ export function renderCellValue(
   if (value instanceof UrlValue) {
     return renderExternalLink(value.url, value.display);
   }
+
+  // as in Obsidian: html() renders its HTML, image() shows the image, icon() the icon
+  if (value instanceof HtmlValue) {
+    return <span class="bases-html" dangerouslySetInnerHTML={{ __html: value.html }} />;
+  }
+  if (value instanceof ImageValue) {
+    const { src } = resolveImageSrc(value.src, ctx);
+    return <img class="bases-image" src={src} alt="" loading="lazy" />;
+  }
+  if (value instanceof IconValue) return renderIcon(value.name);
 
   if (value instanceof TagValue) return renderTag(value, ctx);
 
@@ -264,6 +281,8 @@ export function resolveEntryPropertyValue(column: string, entry: BasesEntry): un
   if (column.startsWith("note.")) {
     return getNestedValue(entry.properties, column.slice(5).split("."));
   }
+  const linked = entry.linkedFiles?.[column];
+  if (linked) return linked;
   if (column.startsWith("file.")) {
     return getNestedValue(entry.fileProperties, column.slice(5).split("."));
   }

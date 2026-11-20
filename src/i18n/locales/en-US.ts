@@ -10,7 +10,9 @@ export default {
       galleryView: "Gallery",
       boardView: "Board",
       noImage: "No image available",
-      uncategorized: "Uncategorized",
+      // as Obsidian labels the group of entries without a value
+      uncategorized: "None",
+      summaryEmpty: "Empty",
       showingCount: "Showing {count} of {total} entries",
     },
   },

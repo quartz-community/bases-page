@@ -249,10 +249,17 @@ describe("resolveBasesEntries", () => {
     const basesData: BasesData = {};
     const view: BasesView = {
       type: "table",
-      order: ["priority"],
+      sort: [{ property: "priority", direction: "ASC" }],
     };
     const result = resolveBasesEntries(basesData, baseFiles, view);
     expect(result.entries.map((entry) => entry.slug)).toEqual(["notes/bravo", "notes/alpha"]);
+  });
+
+  it("without a sort, entries are in file name order: order only lists columns", () => {
+    const basesData: BasesData = {};
+    const view: BasesView = { type: "table", order: ["priority"] };
+    const result = resolveBasesEntries(basesData, [...baseFiles].reverse(), view);
+    expect(result.entries.map((entry) => entry.slug)).toEqual(["notes/alpha", "notes/bravo"]);
   });
 
   it("sorts entries by direction", () => {
@@ -291,6 +298,8 @@ describe("resolveBasesEntries", () => {
       tags: ["#work", "#important"],
       links: ["beta"],
       embeds: [],
+      backlinks: [],
+      size: undefined,
       created: "2024-01-01T00:00:00.000Z",
       modified: "2024-01-02T00:00:00.000Z",
       ctime: new Date("2024-01-01T00:00:00Z"),
@@ -796,11 +805,12 @@ describe("this context of a base embedded in a note", () => {
     expect(
       result.entries.map(({ fileProperties: f }) => [f.name, f.path, f.ext, f.folder]),
     ).toEqual([
+      // file name order, as in Obsidian
+      ["Board.base", "boards/Board.base", "base", "boards"],
+      ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
       ["note", "boards/note.md", "md", "boards"],
       ["Plan.canvas", "boards/Plan.canvas", "canvas", "boards"],
-      ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
       ["Sketch.excalidraw", "boards/Sketch.excalidraw.md", "md", "boards"],
-      ["Board.base", "boards/Board.base", "base", "boards"],
     ]);
 
     const canvases = resolveBasesEntries({ filters: 'file.ext == "canvas"' }, files);
@@ -908,5 +918,88 @@ describe("self-context view filters", () => {
     const result = resolveBasesEntries(bases, [...files, hidden], undefined, self);
 
     expect(result.entries.map((entry) => entry.slug)).toEqual(["people/alice", "people/bob"]);
+  });
+});
+
+describe("file.size", () => {
+  it("is the source file's size in bytes, as in Obsidian", async () => {
+    const { mkdtempSync, writeFileSync } = await import("fs");
+    const { join } = await import("path");
+    const { tmpdir } = await import("os");
+    const dir = mkdtempSync(join(tmpdir(), "bases-size-"));
+    const source = join(dir, "sized.md");
+    const text = "---\ntitle: é\n---\nhello\n";
+    writeFileSync(source, text);
+    const note = {
+      slug: "sized",
+      filePath: source,
+      relativePath: "sized.md",
+      frontmatter: { title: "é" },
+    } as unknown as QuartzPluginData;
+    const { entries } = resolveBasesEntries({ formulas: { s: "file.size" } }, [note]);
+    expect(entries[0]?.formulaValues.s).toBe(Buffer.byteLength(text)); // é is 2 bytes
+    expect(Buffer.byteLength(text)).toBe(text.length + 1);
+    const missing = { ...note, slug: "gone", filePath: join(dir, "gone.md") } as QuartzPluginData;
+    expect(
+      resolveBasesEntries({ formulas: { s: "file.size" } }, [missing]).entries[0]?.formulaValues.s,
+    ).toBeUndefined();
+  });
+});
+
+// Obsidian 1.15.1 (obsidian-bases-probe, parity survey vault v1)
+describe("file.links, file.backlinks and file.properties as in Obsidian", () => {
+  const alpha = {
+    slug: "projects/alpha",
+    filePath: "projects/Alpha.md",
+    relativePath: "projects/Alpha.md",
+    frontmatter: { status: "open", tags: ["inline"], title: "Alpha", modified: "2024-01-01" },
+    basesPropertyKeys: ["status"],
+    basesTags: { file: ["#inline"], note: undefined },
+    links: ["projects/beta", "tags/inline"],
+  } as unknown as QuartzPluginData;
+  const beta = {
+    slug: "projects/beta",
+    filePath: "projects/Beta.md",
+    relativePath: "projects/Beta.md",
+    frontmatter: {},
+    basesPropertyKeys: [],
+    links: [],
+  } as unknown as QuartzPluginData;
+
+  it("file.links leaves out the note's tags; file.backlinks lists the linking notes", () => {
+    const { entries } = resolveBasesEntries(
+      { formulas: { l: "file.links", b: "file.backlinks" } },
+      [alpha, beta],
+    );
+    const [a, b] = entries;
+    expect(a?.formulaValues.l).toEqual(["projects/beta"]);
+    expect(b?.formulaValues.b).toEqual(["projects/alpha"]);
+    // a base's page links to its entries; a .base file links nothing
+    const basePage = {
+      slug: "parity.base",
+      links: ["projects/beta"],
+    } as unknown as QuartzPluginData;
+    const withBase = resolveBasesEntries({ formulas: { b: "file.backlinks" } }, [
+      alpha,
+      beta,
+      basePage,
+    ]);
+    expect(withBase.entries.find((e) => e.slug === "projects/beta")?.formulaValues.b).toEqual([
+      "projects/alpha",
+    ]);
+    // shown as the linked notes
+    expect((a?.linkedFiles?.["file.links"]?.[0] as { name: string }).name).toBe("Beta");
+    expect((b?.linkedFiles?.["file.backlinks"]?.[0] as { name: string }).name).toBe("Alpha");
+    // a formula that is one of those lists shows the same way
+    expect((a?.linkedFiles?.["formula.l"]?.[0] as { name: string }).name).toBe("Beta");
+  });
+
+  it("file.properties holds the frontmatter as written, not what Quartz adds", () => {
+    const { entries } = resolveBasesEntries(
+      { formulas: { k: "file.properties.keys()", t: "note.title" } },
+      [alpha],
+    );
+    expect(entries[0]?.formulaValues.k).toEqual(["status"]);
+    expect(entries[0]?.formulaValues.t).toBeUndefined();
   });
 });

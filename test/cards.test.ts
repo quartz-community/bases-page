@@ -108,10 +108,10 @@ describe("resolveImageSrc", () => {
     });
   });
 
-  describe("plain relative paths", () => {
-    it("passes through relative path as-is", () => {
+  describe("plain paths", () => {
+    it('are files in the vault, resolved like links (image("images/photo.png"))', () => {
       const result = resolveImageSrc("images/photo.png", defaultOpts);
-      expect(result).toEqual({ src: "images/photo.png", isColor: false });
+      expect(result).toEqual(resolveImageSrc("[[images/photo.png]]", defaultOpts));
     });
   });
 });

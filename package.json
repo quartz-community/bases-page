@@ -79,6 +79,7 @@
     }
   },
   "dependencies": {
+    "@lucide/icons": "^1.70.0",
     "@quartz-community/types": "^1.0.0",
     "@quartz-community/utils": "^1.1.0"
   },

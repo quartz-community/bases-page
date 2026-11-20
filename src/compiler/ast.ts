@@ -1,6 +1,6 @@
 import type { Span } from "./tokens";
 
-export type LiteralValue = string | number | boolean | null;
+export type LiteralValue = string | number | boolean | null | RegExp;
 
 export type UnaryOperator = "!" | "-";
 

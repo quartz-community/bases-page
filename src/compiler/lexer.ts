@@ -35,6 +35,22 @@ function isIdentifierPart(ch: string): boolean {
   return isIdentifierStart(ch) || isDigit(ch);
 }
 
+const VALUE_END = new Set<TokenType>([
+  TokenType.Number,
+  TokenType.String,
+  TokenType.Regex,
+  TokenType.Identifier,
+  TokenType.True,
+  TokenType.False,
+  TokenType.Null,
+  TokenType.RightParen,
+  TokenType.RightBracket,
+]);
+
+function regexAllowedAfter(previous: Token | undefined): boolean {
+  return !previous || !VALUE_END.has(previous.type);
+}
+
 class Lexer {
   private readonly input: string;
   private index = 0;
@@ -65,6 +81,13 @@ class Lexer {
 
       if (ch === '"' || ch === "'") {
         tokens.push(this.readString());
+        continue;
+      }
+
+      // as in Obsidian, /pattern/flags is a regular expression where a value is expected (and
+      // a division after a value)
+      if (ch === "/" && regexAllowedAfter(tokens[tokens.length - 1])) {
+        tokens.push(this.readRegex());
         continue;
       }
 
@@ -135,6 +158,36 @@ class Lexer {
     }
 
     throw new CompilerError("Unterminated string literal", { start, end: this.index });
+  }
+
+  /** `/pattern/flags`; the token's value is `flags/pattern`. */
+  private readRegex(): Token {
+    const start = this.index;
+    this.advance(); // the opening /
+    let pattern = "";
+    let inClass = false;
+    while (!this.isAtEnd()) {
+      const ch = this.advance();
+      if (ch === "\\") {
+        if (this.isAtEnd()) break;
+        pattern += ch + this.advance();
+        continue;
+      }
+      if (ch === "[") inClass = true;
+      else if (ch === "]") inClass = false;
+      else if (ch === "/" && !inClass) {
+        let flags = "";
+        while (!this.isAtEnd() && /[a-z]/i.test(this.peek())) flags += this.advance();
+        try {
+          new RegExp(pattern, flags);
+        } catch {
+          throw new CompilerError("Invalid regular expression", { start, end: this.index });
+        }
+        return this.makeToken(TokenType.Regex, `${flags}/${pattern}`, start, this.index);
+      }
+      pattern += ch;
+    }
+    throw new CompilerError("Unterminated regular expression", { start, end: this.index });
   }
 
   private readSymbol(): Token {
