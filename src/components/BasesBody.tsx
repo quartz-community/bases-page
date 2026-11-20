@@ -99,6 +99,7 @@ export default ((opts?: BasesPageOptions) => {
                     slug={slug}
                     allSlugs={allSlugs}
                     linkResolution={linkResolution}
+                    propertyLabels={basesOptions?.propertyLabels}
                     options={registration.options}
                     tagPages={siteHasTagPages(props.ctx)}
                   />

@@ -53,6 +53,7 @@ const CardsView: ViewRenderer = ({
   allSlugs,
   linkResolution,
   tagPages,
+  propertyLabels,
 }) => {
   const imageProperty = typeof view.image === "string" && view.image ? view.image : undefined;
   const columns = (view.order ?? ["file.name"]).filter((column) => column !== imageProperty);
@@ -84,7 +85,9 @@ const CardsView: ViewRenderer = ({
             // as in Obsidian, a grouped cards view has a heading per group
             <div class="bases-group-heading">
               {groupProperty && (
-                <span class="bases-group-property">{getColumnLabel(groupProperty, basesData)}</span>
+                <span class="bases-group-property">
+                  {getColumnLabel(groupProperty, basesData, propertyLabels)}
+                </span>
               )}
               <span class="bases-group-value">{group.label}</span>
             </div>
@@ -141,7 +144,9 @@ const CardsView: ViewRenderer = ({
                       const value = resolveEntryPropertyValue(column, entry);
                       return (
                         <div class="bases-card-row" data-property={column}>
-                          <span class="bases-card-label">{getColumnLabel(column, basesData)}</span>
+                          <span class="bases-card-label">
+                            {getColumnLabel(column, basesData, propertyLabels)}
+                          </span>
                           <span class="bases-card-value">
                             {isEmptyValue(value) ? (
                               <span class="bases-empty-value">—</span>
