@@ -153,6 +153,8 @@ export interface BasesView {
   limit?: number;
   /** Group entries by a property */
   groupBy?: GroupBy;
+  /** Only these groups, in this order (`null`: the group without a value) */
+  groupOrder?: unknown[];
   /** View-specific filters (merged with global filters at resolve time) */
   filters?: FilterNode;
   /** Sort order — list of property paths in priority order */
@@ -166,7 +168,19 @@ export interface BasesView {
   /** Column widths in pixels, keyed by property path */
   columnSize?: Record<string, number>;
   /** Row height in pixels */
-  rowHeight?: number;
+  rowHeight?: "short" | "medium" | "tall" | "extra" | string | number;
+
+  // -- List-specific --
+  /** List markers: bullet (default), number or none */
+  markers?: "bullet" | "number" | "none" | string;
+  /** Text between a list item's properties (default ", ") */
+  separator?: string;
+  /** Show a list item's properties as nested items */
+  indentProperties?: boolean;
+
+  // -- Kanban-specific --
+  /** Width of a kanban column in pixels */
+  columnWidth?: number;
 
   // -- Cards / Gallery specific --
   /** Property name containing the image URL/path */

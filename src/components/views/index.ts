@@ -1,6 +1,6 @@
 import { viewRegistry } from "../../registry";
 
-import { boardViewRegistration } from "./board";
+import { boardViewRegistration, kanbanViewRegistration } from "./board";
 import { cardsViewRegistration } from "./cards";
 import { galleryViewRegistration } from "./gallery";
 import { listViewRegistration } from "./list";
@@ -12,4 +12,5 @@ export function registerBuiltinViews(): void {
   viewRegistry.register(cardsViewRegistration);
   viewRegistry.register(galleryViewRegistration);
   viewRegistry.register(boardViewRegistration);
+  viewRegistry.register(kanbanViewRegistration);
 }
