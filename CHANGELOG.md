@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.0
+
+### Minor Changes
+
+- 5bfa2a4: Columns and properties are labelled with the property's name, as in Obsidian (`priority`, `file name`, `my_property`), instead of a title-cased version (`Priority`, `Name`, `My Property`). The new `propertyLabels` option brings the title-cased labels back (`propertyLabels: title`). A property's `displayName` is used either way.
+
 ## 1.4.0
 
 ### Minor Changes
