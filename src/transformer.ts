@@ -1,7 +1,7 @@
 import type { Root as HTMLRoot, Element, ElementContent } from "hast";
 import type { QuartzTransformerPlugin, BuildCtx } from "@quartz-community/types";
 import type { FilePath } from "@quartz-community/utils";
-import { slugifyFilePath } from "@quartz-community/utils";
+import { slugHeading, slugifyFilePath } from "@quartz-community/utils";
 import type { VFile } from "vfile";
 import { visit } from "unist-util-visit";
 import { readFileSync } from "fs";
@@ -39,7 +39,7 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
             const embeds: string[] = [];
             // Quartz slugs an embed's #anchor; Obsidian matches the view name as written
             const rawEmbeds = rawBaseEmbeds(typeof file.value === "string" ? file.value : "");
-            let embedIndex = 0;
+            const usedRawEmbeds = new Set<number>();
 
             visit(tree, "element", (node: Element, index, parent) => {
               if (!parent || index === undefined) return;
@@ -59,11 +59,18 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
               }
 
               const block = (node.properties?.dataBlock as string) ?? "";
-              const rawEmbed = rawEmbeds[embedIndex];
-              embedIndex += 1;
-              const rawMatches =
-                rawEmbed !== undefined &&
-                slugifyFilePath(rawEmbed.path as unknown as FilePath) === url;
+              // the ![[…]] this transclusion came from: the next unused one with the same path and
+              // anchor. A transclusion without one (e.g. from a Markdown-form embed,
+              // ![](Demo.base)) uses none, rather than another embed's (issue #39)
+              const rawIndex = rawEmbeds.findIndex(
+                (raw, i) =>
+                  !usedRawEmbeds.has(i) &&
+                  slugifyFilePath(raw.path as unknown as FilePath) === url &&
+                  (raw.view ? `#${slugHeading(raw.view)}` : "") === block,
+              );
+              if (rawIndex !== -1) usedRawEmbeds.add(rawIndex);
+              const rawEmbed = rawIndex === -1 ? undefined : rawEmbeds[rawIndex];
+              const rawMatches = rawEmbed !== undefined;
               const viewName = rawMatches
                 ? rawEmbed.view
                 : block.startsWith("#")

@@ -2,6 +2,7 @@ import type { BasesData, BasesEntry, BasesView, QuartzPluginData, SortEntry } fr
 import { evaluate, evaluateFilter, isDuration, resolvePropertyValue } from "./compiler";
 import type { EvalContext } from "./compiler";
 import { TagValue } from "./compiler/values";
+import { statSync } from "fs";
 import { withHash } from "./tags";
 import type { NoteTags } from "./tags";
 
@@ -58,6 +59,17 @@ function toDate(value: unknown): Date | undefined {
   return undefined;
 }
 
+/** file.size: the source file's size in bytes, as in Obsidian. */
+function fileSize(fileData: QuartzPluginData): number | undefined {
+  const source = fileData.filePath;
+  if (typeof source !== "string" || !source) return undefined;
+  try {
+    return statSync(source).size;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildFileProperties(
   fileData: QuartzPluginData,
   slug: string,
@@ -95,6 +107,7 @@ function buildFileProperties(
     modified: mtime?.toISOString(),
     ctime,
     mtime,
+    size: fileSize(fileData),
   };
 }
 

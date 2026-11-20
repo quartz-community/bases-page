@@ -918,3 +918,28 @@ describe("self-context view filters", () => {
     expect(result.entries.map((entry) => entry.slug)).toEqual(["people/alice", "people/bob"]);
   });
 });
+
+describe("file.size", () => {
+  it("is the source file's size in bytes, as in Obsidian", async () => {
+    const { mkdtempSync, writeFileSync } = await import("fs");
+    const { join } = await import("path");
+    const { tmpdir } = await import("os");
+    const dir = mkdtempSync(join(tmpdir(), "bases-size-"));
+    const source = join(dir, "sized.md");
+    const text = "---\ntitle: é\n---\nhello\n";
+    writeFileSync(source, text);
+    const note = {
+      slug: "sized",
+      filePath: source,
+      relativePath: "sized.md",
+      frontmatter: { title: "é" },
+    } as unknown as QuartzPluginData;
+    const { entries } = resolveBasesEntries({ formulas: { s: "file.size" } }, [note]);
+    expect(entries[0]?.formulaValues.s).toBe(Buffer.byteLength(text)); // é is 2 bytes
+    expect(Buffer.byteLength(text)).toBe(text.length + 1);
+    const missing = { ...note, slug: "gone", filePath: join(dir, "gone.md") } as QuartzPluginData;
+    expect(
+      resolveBasesEntries({ formulas: { s: "file.size" } }, [missing]).entries[0]?.formulaValues.s,
+    ).toBeUndefined();
+  });
+});

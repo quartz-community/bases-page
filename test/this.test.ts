@@ -141,6 +141,43 @@ describe("several bases on one page (community PR #2)", () => {
   });
 });
 
+describe("a base transclusion without a ![[…]] in the source (issue #39)", () => {
+  it("doesn't shift the views of the embeds after it", async () => {
+    const { mkdtempSync, writeFileSync } = await import("fs");
+    const { join } = await import("path");
+    const { tmpdir } = await import("os");
+    const dir = mkdtempSync(join(tmpdir(), "bases-39-"));
+    writeFileSync(
+      join(dir, "ThisProbe.base"),
+      "views:\n  - type: table\n    name: First\n  - type: table\n    name: Second\n",
+    );
+    const plugin = BasesTransformer({});
+    const ctx = { allFiles: ["ThisProbe.base"], argv: { directory: dir } } as never;
+    const [embeds] = plugin.htmlPlugins!(ctx) as Array<
+      () => (tree: HTMLRoot, file: { data: Record<string, unknown>; value: string }) => void
+    >;
+    const tree: HTMLRoot = {
+      type: "root",
+      children: [
+        // from a Markdown-form embed, turned into a transclusion before this plugin runs
+        transclusion("thisprobe.base", "", "div"),
+        transclusion("thisprobe.base", "", "div"),
+        transclusion("thisprobe.base", "#second", "div"),
+      ],
+    };
+    const file = {
+      data: {} as Record<string, unknown>,
+      value: "- ![](ThisProbe.base)\n- ![[ThisProbe.base]]\n- ![[ThisProbe.base#Second]]\n",
+    };
+    embeds!()(tree, file);
+    const placeholders = tree.children.map(
+      (node) => (node as { properties: Record<string, unknown> }).properties,
+    );
+    expect(placeholders.map((p) => p.dataQzBasesView)).toEqual([undefined, undefined, "Second"]);
+    expect(placeholders[2]?.dataQzBasesViewExact).toBe("true");
+  });
+});
+
 describe("file.hasLink(this) on a .base page", () => {
   it("finds the notes that embed the base", () => {
     const embedder = {
