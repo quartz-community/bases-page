@@ -7,7 +7,7 @@ import { visit } from "unist-util-visit";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parseBasesData } from "./parser";
-import { extractNoteTags } from "./tags";
+import { extractNoteTags, frontmatterKeys } from "./tags";
 import type { NoteTags } from "./tags";
 import type { BasesData, BasesPageOptions } from "./types";
 
@@ -33,8 +33,12 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
         () => {
           return (tree: HTMLRoot, file: VFile) => {
             // Quartz keeps tags slugged and merged; Bases needs them as written
-            if (typeof file.value === "string") file.data.basesTags = extractNoteTags(file.value);
-            else if (file.value) file.data.basesTags = extractNoteTags(String(file.value));
+            const source = typeof file.value === "string" ? file.value : String(file.value ?? "");
+            if (file.value) {
+              file.data.basesTags = extractNoteTags(source);
+              // Obsidian's properties are the frontmatter as written, without the ones Quartz adds
+              file.data.basesPropertyKeys = frontmatterKeys(source);
+            }
 
             const embeds: string[] = [];
             // Quartz slugs an embed's #anchor; Obsidian matches the view name as written
@@ -324,5 +328,6 @@ declare module "vfile" {
     basesBlocks?: BasesData[];
     embeds?: string[];
     basesTags?: NoteTags;
+    basesPropertyKeys?: string[];
   }
 }

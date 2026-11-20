@@ -8,6 +8,8 @@ import {
   resolveEntryPropertyValue,
 } from "../shared/cell";
 import { transformLink } from "@quartz-community/utils";
+import { resolveImageSrc } from "../shared/image";
+import type { ResolveImageOpts } from "../shared/image";
 
 function formatMessage(template: string, values: Record<string, string | number>): string {
   return Object.entries(values).reduce(
@@ -16,37 +18,8 @@ function formatMessage(template: string, values: Record<string, string | number>
   );
 }
 
-const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}){1,2}$/i;
-const WIKILINK_RE = /^\[\[(.+?)(?:\|.*)?\]\]$/;
-
-export interface ResolveImageOpts {
-  slug: string;
-  allSlugs: string[];
-  linkResolution: "absolute" | "relative" | "shortest";
-}
-
-export function resolveImageSrc(
-  raw: string,
-  opts: ResolveImageOpts,
-): { src: string; isColor: boolean } {
-  if (!raw) return { src: "", isColor: false };
-
-  if (HEX_COLOR_RE.test(raw)) {
-    return { src: raw, isColor: true };
-  }
-
-  const wikiMatch = WIKILINK_RE.exec(raw);
-  if (wikiMatch?.[1]) {
-    const target = wikiMatch[1].trim();
-    const resolved = transformLink(opts.slug as FullSlug, target, {
-      strategy: opts.linkResolution,
-      allSlugs: opts.allSlugs as FullSlug[],
-    });
-    return { src: String(resolved), isColor: false };
-  }
-
-  return { src: raw, isColor: false };
-}
+export { resolveImageSrc } from "../shared/image";
+export type { ResolveImageOpts } from "../shared/image";
 
 /** Obsidian's `imageAspectRatio` is height / width (0.5 is a wide cover); the default is 1. */
 export function coverAspectRatio(view: {

@@ -47,6 +47,11 @@ class Parser {
       }
       case TokenType.String:
         return { type: "Literal", value: token.value, span: token.span };
+      case TokenType.Regex: {
+        const slash = token.value.indexOf("/");
+        const value = new RegExp(token.value.slice(slash + 1), token.value.slice(0, slash));
+        return { type: "Literal", value, span: token.span };
+      }
       case TokenType.True:
         return { type: "Literal", value: true, span: token.span };
       case TokenType.False:

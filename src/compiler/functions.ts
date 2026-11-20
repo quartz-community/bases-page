@@ -14,12 +14,16 @@ import {
   URL_SCHEME_RE,
   UrlValue,
   isUrlValue,
+  HtmlValue,
+  IconValue,
+  ImageValue,
 } from "./values";
 import { tagMatches } from "../tags";
 
 export type GlobalFunction = (args: unknown[], context: EvalContext) => unknown;
 export type MethodFunction = (target: unknown, args: unknown[], context: EvalContext) => unknown;
-export type MethodTarget = "string" | "number" | "date" | "duration" | "list" | "file" | "object";
+export type MethodTarget =
+  "string" | "number" | "date" | "duration" | "list" | "file" | "object" | "regex";
 
 export const globalFunctions = new Map<string, GlobalFunction>();
 export const methodFunctions = new Map<MethodTarget, Map<string, MethodFunction>>();
@@ -33,6 +37,7 @@ export function methodTypeName(value: unknown): string {
   if (isDuration(value)) return "Duration";
   if (isTagValue(value) || typeof value === "string") return "String";
   if (isUrlValue(value)) return "Url";
+  if (value instanceof RegExp) return "Regexp";
   if (typeof value === "number") return "Number";
   if (typeof value === "boolean") return "Boolean";
   if (value instanceof Date) return "Date";
@@ -187,6 +192,11 @@ function parseWikilink(value: string): { target: string; subpath: string } | nul
 
 // The link target for a file value, a path, or an existing wikilink (keeping its #heading;
 // like Obsidian, a wikilink's alias is dropped).
+/** A copy, so a /g regex's lastIndex never carries over between uses. */
+function freshRegex(regex: RegExp): RegExp {
+  return new RegExp(regex.source, regex.flags);
+}
+
 function linkTarget(value: unknown): string {
   if (isFileValue(value)) return value.path.replace(/\.md$/, "");
   const raw = toStringValue(value);
@@ -291,6 +301,7 @@ function typeNameOf(value: unknown): string {
 
 function getMethodTarget(value: unknown): MethodTarget | undefined {
   if (isDuration(value)) return "duration";
+  if (value instanceof RegExp) return "regex";
   if (isTagValue(value)) return "string";
   if (typeof value === "string") return "string";
   if (typeof value === "number" && !Number.isNaN(value)) return "number";
@@ -364,18 +375,20 @@ registerGlobalFunction("link", ([path, display]) => {
 });
 
 registerGlobalFunction("image", ([path]) => {
-  const target = isFileValue(path) ? path.path.replace(/\.md$/, "") : toStringValue(path);
-  if (!target) return "";
-  return `![[${target}]]`;
+  const target = isFileValue(path) ? path.path : linkTarget(path);
+  if (!target) return null;
+  return new ImageValue(target);
 });
 
 registerGlobalFunction("icon", ([name]) => {
-  const value = toStringValue(name);
-  if (!value) return "";
-  return `:${value}:`;
+  const value = toStringValue(name).trim();
+  if (!value) return null;
+  return new IconValue(value);
 });
 
-registerGlobalFunction("html", ([value]) => toStringValue(value));
+registerGlobalFunction("html", ([value]) => new HtmlValue(toStringValue(value)));
+
+registerGlobalFunction("random", () => Math.random());
 
 registerGlobalFunction("escapeHTML", ([value]) => {
   const text = toStringValue(value);
@@ -490,9 +503,12 @@ registerMethodFunction("string", "trim", (target) => toStringValue(target).trim(
 
 registerMethodFunction("string", "replace", (target, [search, replacement]) => {
   const source = toStringValue(target);
+  const replacementText = toStringValue(replacement);
+  // a regular expression replaces its first match (every match with the g flag), and $1 etc.
+  // refer to its groups, as in JavaScript
+  if (search instanceof RegExp) return source.replace(freshRegex(search), replacementText);
   const needle = toStringValue(search);
   if (!needle) return source;
-  const replacementText = toStringValue(replacement);
   return source.split(needle).join(replacementText);
 });
 
@@ -656,10 +672,28 @@ registerMethodFunction("string", "containsAny", (target, args) => {
   return args.some((needle) => value.includes(toStringValue(needle).toLowerCase()));
 });
 
-registerMethodFunction("string", "split", (target, [separator]) => {
+registerMethodFunction("string", "split", (target, [separator, limit]) => {
   const value = toStringValue(target);
-  const sep = toStringValue(separator);
-  return value.split(sep);
+  const sep = separator instanceof RegExp ? freshRegex(separator) : toStringValue(separator);
+  // split(separator, n): at most n parts
+  const n = typeof limit === "number" && limit >= 0 ? Math.floor(limit) : undefined;
+  return value.split(sep, n);
+});
+
+// /pattern/.matches(text)
+registerMethodFunction("regex", "matches", (target, [text]) => {
+  if (!(target instanceof RegExp)) return false;
+  return freshRegex(target).test(toStringValue(text));
+});
+
+// link.linksTo(file): whether the link points to that file
+registerMethodFunction("string", "linksTo", (target, [file], context) => {
+  const link = parseWikilink(toStringValue(target));
+  if (!link) return false;
+  const linked = lookupFile(link.target, context);
+  const other = isFileValue(file) ? file : lookupFile(linkTarget(file), context);
+  if (!linked || !other) return false;
+  return linked.path === other.path;
 });
 
 registerMethodFunction("string", "title", (target) => {

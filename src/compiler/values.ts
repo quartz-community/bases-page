@@ -604,3 +604,27 @@ export class UrlValue {
 export function isUrlValue(value: unknown): value is UrlValue {
   return value instanceof UrlValue;
 }
+
+/** `html("<b>x</b>")`: Obsidian renders the HTML. */
+export class HtmlValue {
+  constructor(public readonly html: string) {}
+  toString(): string {
+    return this.html;
+  }
+}
+
+/** `image(path or URL)`: Obsidian shows the image. `src` is a URL or a vault path. */
+export class ImageValue {
+  constructor(public readonly src: string) {}
+  toString(): string {
+    return this.src;
+  }
+}
+
+/** `icon("star")`: Obsidian shows the Lucide icon of that name. */
+export class IconValue {
+  constructor(public readonly name: string) {}
+  toString(): string {
+    return this.name;
+  }
+}

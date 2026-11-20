@@ -238,6 +238,8 @@ export interface BasesEntry {
     tags: string[];
     links: string[];
     embeds?: string[];
+    /** The notes that link to this one (slugs) */
+    backlinks?: string[];
     created?: string | Date;
     modified?: string | Date;
     ctime?: Date;
@@ -246,4 +248,9 @@ export interface BasesEntry {
   };
   /** Computed formula values */
   formulaValues: Record<string, unknown>;
+  /**
+   * file.links, file.backlinks and file.embeds as files (unresolved ones as their slug), for
+   * display: Obsidian shows the linked notes by name
+   */
+  linkedFiles?: Partial<Record<"links" | "backlinks" | "embeds", unknown[]>>;
 }

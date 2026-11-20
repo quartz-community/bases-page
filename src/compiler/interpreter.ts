@@ -26,6 +26,8 @@ export type EvalContext = {
     tags: string[];
     links: string[];
     embeds?: string[];
+    /** The notes that link to this one (slugs) */
+    backlinks?: string[];
     properties?: Record<string, unknown>;
     created?: string | Date;
     modified?: string | Date;

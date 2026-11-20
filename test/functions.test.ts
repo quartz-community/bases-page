@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { evaluate, UrlValue } from "../src/compiler";
 import type { EvalContext } from "../src/compiler";
+import { HtmlValue, IconValue, ImageValue } from "../src/compiler/values";
 
 const eventDate = new Date(2024, 0, 15, 12, 0, 0);
 
@@ -618,8 +619,10 @@ describe("link helpers", () => {
   it("formats links and media", () => {
     expect(evaluate('link("page")', context)).toBe("[[page]]");
     expect(evaluate('link("page", "display")', context)).toBe("[[page|display]]");
-    expect(evaluate('image("photo.png")', context)).toBe("![[photo.png]]");
-    expect(evaluate('icon("star")', context)).toBe(":star:");
+    expect(evaluate('image("photo.png")', context)).toEqual(new ImageValue("photo.png"));
+    expect(evaluate('image("[[photo.png]]")', context)).toEqual(new ImageValue("photo.png"));
+    expect(evaluate('icon("star")', context)).toEqual(new IconValue("star"));
+    expect(evaluate('html("<b>x</b>")', context)).toEqual(new HtmlValue("<b>x</b>"));
   });
 
   it("extracts path from file objects in link()", () => {
@@ -660,7 +663,7 @@ describe("link helpers", () => {
   });
 
   it("extracts path from file objects in image()", () => {
-    expect(evaluate("image(file)", context)).toBe("![[notes/test]]");
+    expect(evaluate("image(file)", context)).toEqual(new ImageValue("notes/test.md"));
   });
 
   it("strips .md extension from file object path in link()", () => {
@@ -677,9 +680,9 @@ describe("link helpers", () => {
     expect(evaluate('"[[missing|x]]".asFile().asLink()', context)).toBe("[[missing]]");
   });
 
-  it("strips .md extension from file object path in image()", () => {
-    const fileWithMd = evaluate('image(file("notes/doc.md"))', context);
-    expect(fileWithMd).toBe("![[notes/doc]]");
+  it("image() of a file object is that file", () => {
+    const image = evaluate('image(file("attachments/dot.png"))', context);
+    expect(image).toEqual(new ImageValue("attachments/dot.png"));
   });
 });
 
@@ -988,5 +991,33 @@ describe("wikilink compatibility", () => {
     expect(evaluate("note.value.asFile().path", ctx)).toBe("Folder/Apple.md");
 
     expect(evaluate("note.value.asFile().hasTag('fruit')", ctx)).toBe(true);
+  });
+});
+
+// Obsidian 1.15.1 (obsidian-bases-probe, parity survey vault v1)
+describe("regular expressions, split limits and random()", () => {
+  const ctx = { note: {}, file: {} as never, formula: {} } as EvalContext;
+  it("/re/.matches(text)", () => {
+    expect(evaluate('/^a.c$/.matches("abc")', ctx)).toBe(true);
+    expect(evaluate('/^a.c$/i.matches("ABD")', ctx)).toBe(false);
+    expect(evaluate('/b/g.matches("abc") && /b/g.matches("abc")', ctx)).toBe(true);
+  });
+  it("replace with a regular expression, groups and the g flag", () => {
+    expect(evaluate('"John Smith".replace(/(\\w+) (\\w+)/, "$2, $1")', ctx)).toBe("Smith, John");
+    expect(evaluate('"a-b-c".replace(/-/, "+")', ctx)).toBe("a+b-c");
+    expect(evaluate('"a-b-c".replace(/-/g, "+")', ctx)).toBe("a+b+c");
+  });
+  it("split by a regular expression, and at most n parts", () => {
+    expect(evaluate('"a1b22c".split(/[0-9]+/)', ctx)).toEqual(["a", "b", "c"]);
+    expect(evaluate('"a,b,c,d".split(",", 2)', ctx)).toEqual(["a", "b"]);
+  });
+  it("division still works", () => {
+    expect(evaluate("10 / 4", ctx)).toBe(2.5);
+    expect(evaluate("(6) / 2 / 3", ctx)).toBe(1);
+  });
+  it("random() is in [0, 1)", () => {
+    const value = evaluate("random()", ctx) as number;
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(value).toBeLessThan(1);
   });
 });

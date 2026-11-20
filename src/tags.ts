@@ -68,6 +68,24 @@ function inlineTags(body: string): string[] {
   return tags;
 }
 
+/**
+ * The property names a note's frontmatter has, as written. Quartz adds some (a `title`, dates)
+ * that Obsidian's Bases doesn't see. Undefined if the frontmatter can't be read.
+ */
+export function frontmatterKeys(source: string): string[] | undefined {
+  const { yaml } = splitFrontmatter(source);
+  if (yaml === undefined) return [];
+  let data: unknown;
+  try {
+    data = parse(yaml, { schema: "failsafe" });
+  } catch {
+    return undefined;
+  }
+  if (data === null || data === undefined) return [];
+  if (typeof data !== "object" || Array.isArray(data)) return undefined;
+  return Object.keys(data as Record<string, unknown>);
+}
+
 /** Reads a note's tags, as written, from its Markdown source. */
 export function extractNoteTags(source: string): NoteTags {
   const { yaml, body } = splitFrontmatter(source);
