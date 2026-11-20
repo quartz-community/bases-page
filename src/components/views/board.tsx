@@ -2,7 +2,6 @@ import type { ViewRenderer, ViewTypeRegistration } from "../../types";
 import type { FullSlug } from "@quartz-community/types";
 import { i18n } from "../../i18n";
 import {
-  formatValue,
   getColumnLabel,
   getColumns,
   isEmptyValue,

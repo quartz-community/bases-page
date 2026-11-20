@@ -5,7 +5,6 @@ import {
   formatValue,
   getColumnLabel,
   getColumns,
-  isEmptyValue,
   isNoteProperty,
   renderCellValue,
   resolveEntryPropertyValue,
