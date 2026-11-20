@@ -172,20 +172,26 @@ function compareSort(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b));
 }
 
+// As in Obsidian, entries without a sort are in file name order. `order` only lists the
+// columns: it doesn't sort.
+const BY_FILE_NAME: SortEntry[] = [
+  { property: "file.name", direction: "ASC" },
+  { property: "file.path", direction: "ASC" },
+];
+
 function buildSortKeys(view?: BasesView): SortEntry[] {
-  if (view?.sort && view.sort.length > 0) return view.sort;
+  if (view?.sort && view.sort.length > 0) return [...view.sort, ...BY_FILE_NAME];
   if (view?.groupBy?.property) {
-    return [{ property: view.groupBy.property, direction: view.groupBy.direction ?? "ASC" }];
+    return [
+      { property: view.groupBy.property, direction: view.groupBy.direction ?? "ASC" },
+      ...BY_FILE_NAME,
+    ];
   }
-  if (view?.order && view.order.length > 0) {
-    return view.order.map((property) => ({ property, direction: "ASC" as const }));
-  }
-  return [];
+  return BY_FILE_NAME;
 }
 
 function sortEntries(entries: BasesEntry[], view?: BasesView): BasesEntry[] {
   const sortKeys = buildSortKeys(view);
-  if (sortKeys.length === 0) return entries;
 
   return [...entries].sort((left, right) => {
     for (const key of sortKeys) {

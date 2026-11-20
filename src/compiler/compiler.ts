@@ -12,7 +12,7 @@ import type {
 import { CompilerError } from "./errors";
 import type { Instruction } from "./ir";
 
-const LAZY_METHODS = new Set(["filter", "map", "find", "some", "every", "flatMap"]);
+const LAZY_METHODS = new Set(["filter", "map", "find", "some", "every", "flatMap", "reduce"]);
 
 export type CompiledExpression = {
   ast: Expression;

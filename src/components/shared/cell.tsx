@@ -53,7 +53,7 @@ export function formatValue(value: unknown): string {
   return String(value);
 }
 
-function isNoteProperty(column: string | undefined): boolean {
+export function isNoteProperty(column: string | undefined): boolean {
   if (column === undefined) return false;
   return !/^(formula|file|this)\./.test(column);
 }

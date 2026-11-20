@@ -6,10 +6,12 @@ import {
   getColumnLabel,
   getColumns,
   isEmptyValue,
+  isNoteProperty,
   renderCellValue,
   resolveEntryPropertyValue,
 } from "../shared/cell";
-import { computeSummary } from "../shared/summary";
+import { computeSummary, renderSummary } from "../shared/summary";
+import { coerceDateString } from "../../compiler/values";
 import { transformLink } from "@quartz-community/utils";
 
 function formatMessage(template: string, values: Record<string, string | number>): string {
@@ -95,8 +97,28 @@ const TableView: ViewRenderer = ({
 }) => {
   const columns = getColumns(view, basesData, entries);
   const summaries = view.summaries ?? {};
-  const hasSummary = Object.keys(summaries).length > 0;
+  const hasSummary = columns.some((column) => summaries[column]);
   const localeStrings = i18n(locale).components.bases;
+  const ctx = { slug, allSlugs, linkResolution, locale, tagPages };
+  // one cell per column: the column's summary over `rows`, as Obsidian shows it
+  const summaryCells = (rows: BasesEntry[]) =>
+    columns.map((column) => {
+      const summary = summaries[column];
+      if (!summary) return <td />;
+      const values = rows.map((entry) => {
+        const value = resolveEntryPropertyValue(column, entry);
+        // a note property holding an ISO date is a date, as in a cell
+        return isNoteProperty(column) ? coerceDateString(value) : value;
+      });
+      const value = computeSummary(values, summary, basesData.summaries, locale);
+      return (
+        <td>
+          {renderSummary(summary, value, localeStrings.summaryEmpty, (shown) =>
+            renderCellValue(shown, ctx),
+          )}
+        </td>
+      );
+    });
   const groupProperty = view.groupBy?.property;
   const groupPropertyLabel = groupProperty ? getColumnLabel(groupProperty, basesData) : "";
   const groups = groupEntries(entries, groupProperty, localeStrings.uncategorized);
@@ -139,6 +161,12 @@ const TableView: ViewRenderer = ({
                       <span class="bases-table-group-count">{groupEntries.length}</span>
                     </td>
                   </tr>
+                  {hasSummary && (
+                    // as in Obsidian: each group's summaries, under its heading
+                    <tr class="bases-summary-row bases-group-summary-row">
+                      {summaryCells(groupEntries)}
+                    </tr>
+                  )}
                   {groupEntries.map((entry) =>
                     renderRow(
                       entry,
@@ -159,14 +187,7 @@ const TableView: ViewRenderer = ({
         </tbody>
         {hasSummary && (
           <tfoot>
-            <tr class="bases-summary-row">
-              {columns.map((column) => {
-                const summary = summaries[column];
-                if (!summary) return <td />;
-                const values = entries.map((entry) => resolveEntryPropertyValue(column, entry));
-                return <td>{computeSummary(values, summary)}</td>;
-              })}
-            </tr>
+            <tr class="bases-summary-row">{summaryCells(entries)}</tr>
           </tfoot>
         )}
       </table>

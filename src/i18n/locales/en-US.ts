@@ -11,6 +11,7 @@ export default {
       boardView: "Board",
       noImage: "No image available",
       uncategorized: "Uncategorized",
+      summaryEmpty: "Empty",
       showingCount: "Showing {count} of {total} entries",
     },
   },

@@ -51,7 +51,11 @@ export type EvalContext = {
   };
   /** The site's locale (Quartz `configuration.locale`), for date and duration display */
   locale?: string;
+  /** In a summary formula: the column's values, one per entry (empty ones included) */
+  values?: unknown[];
   _lambdaValue?: unknown;
+  _lambdaIndex?: number;
+  _lambdaAcc?: unknown;
   _fileLookup?: Map<string, EvalContext["file"]>;
 };
 
@@ -324,6 +328,10 @@ function resolveIdentifier(name: string, context: EvalContext): unknown {
   if (name === "file") return context.file;
   if (name === "formula") return context.formula;
   if (name === "value") return context._lambdaValue;
+  if (name === "index" && context._lambdaIndex !== undefined) return context._lambdaIndex;
+  if (name === "acc" && context._lambdaIndex !== undefined && "_lambdaAcc" in context)
+    return context._lambdaAcc;
+  if (name === "values" && context.values !== undefined) return context.values;
   return coerceDateString(context.note[name]);
 }
 
@@ -406,9 +414,16 @@ function popArgs(stack: unknown[], count: number): unknown[] {
 function evaluateLambda(
   program: Instruction[],
   elementValue: unknown,
+  index: number,
   context: EvalContext,
+  extra?: Partial<EvalContext>,
 ): unknown {
-  const lambdaContext: EvalContext = { ...context, _lambdaValue: elementValue };
+  const lambdaContext: EvalContext = {
+    ...context,
+    _lambdaValue: elementValue,
+    _lambdaIndex: index,
+    ...extra,
+  };
   return interpret(program, lambdaContext);
 }
 
@@ -421,34 +436,31 @@ function executeLazyMethod(
   if (!Array.isArray(target)) return undefined;
   const body = argPrograms[0];
   if (!body) return undefined;
+  // as in Obsidian, `value` and `index` (0-based) are the element and its position
+  const each = (element: unknown, index: number) => evaluateLambda(body, element, index, context);
 
   switch (name) {
     case "filter":
-      return target.filter((element) => {
-        const result = evaluateLambda(body, element, context);
-        return Boolean(result);
-      });
+      return target.filter((element, index) => Boolean(each(element, index)));
     case "map":
-      return target.map((element) => evaluateLambda(body, element, context));
-    case "flatMap": {
-      const mapped = target.map((element) => evaluateLambda(body, element, context));
-      return mapped.flat();
-    }
+      return target.map(each);
+    case "flatMap":
+      return target.map(each).flat();
     case "find":
-      return target.find((element) => {
-        const result = evaluateLambda(body, element, context);
-        return Boolean(result);
-      });
+      return target.find((element, index) => Boolean(each(element, index)));
     case "some":
-      return target.some((element) => {
-        const result = evaluateLambda(body, element, context);
-        return Boolean(result);
-      });
+      return target.some((element, index) => Boolean(each(element, index)));
     case "every":
-      return target.every((element) => {
-        const result = evaluateLambda(body, element, context);
-        return Boolean(result);
-      });
+      return target.every((element, index) => Boolean(each(element, index)));
+    case "reduce": {
+      // reduce(expression, initial): `acc` starts as `initial` and becomes each result
+      const initial = argPrograms[1] ? interpret(argPrograms[1], context) : null;
+      return target.reduce(
+        (acc: unknown, element, index) =>
+          evaluateLambda(body, element, index, context, { _lambdaAcc: acc }),
+        initial,
+      );
+    }
     default:
       return undefined;
   }

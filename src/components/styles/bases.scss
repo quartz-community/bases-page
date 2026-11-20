@@ -131,8 +131,18 @@ th.is-sorted-desc .bases-table-header-sort {
 
 .bases-summary-row td {
   background: var(--light);
-  font-weight: 600;
   color: var(--darkgray);
+}
+
+// as in Obsidian: the summary's name in small muted text, then its value
+
+.bases-summary-name {
+  font-size: 0.8em;
+  color: var(--gray);
+}
+
+.bases-summary-value {
+  font-weight: 600;
 }
 
 .bases-table-group-header td {

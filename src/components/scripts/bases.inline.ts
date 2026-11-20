@@ -52,12 +52,15 @@ function sortTable(table, columnIndex, direction) {
     let currentGroup = null;
     for (const row of allRows) {
       if (row.classList.contains("bases-table-group-header")) {
-        currentGroup = { header: row, rows: [] };
+        currentGroup = { header: row, summaries: [], rows: [] };
         groups.push(currentGroup);
+      } else if (currentGroup && row.classList.contains("bases-group-summary-row")) {
+        // a group's summary row stays under its heading
+        currentGroup.summaries.push(row);
       } else if (currentGroup) {
         currentGroup.rows.push(row);
       } else {
-        currentGroup = { header: null, rows: [row] };
+        currentGroup = { header: null, summaries: [], rows: [row] };
         groups.push(currentGroup);
       }
     }
@@ -66,6 +69,7 @@ function sortTable(table, columnIndex, direction) {
     }
     for (const group of groups) {
       if (group.header) body.appendChild(group.header);
+      group.summaries.forEach((row) => body.appendChild(row));
       group.rows.forEach((row) => body.appendChild(row));
     }
   } else {

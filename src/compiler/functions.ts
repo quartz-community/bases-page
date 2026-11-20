@@ -607,7 +607,9 @@ registerMethodFunction("list", "mean", (target) => {
   const numbers = collectNumericArgs(target);
   if (numbers.length === 0) return undefined;
   const sum = numbers.reduce((total, value) => total + value, 0);
-  return sum / numbers.length;
+  // as in Obsidian, an empty value counts (as 0): [80, null].mean() is 40
+  const empty = target.filter((item) => item === null || item === undefined).length;
+  return sum / (numbers.length + empty);
 });
 
 registerMethodFunction("list", "count", (target) => (Array.isArray(target) ? target.length : 0));

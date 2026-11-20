@@ -249,10 +249,17 @@ describe("resolveBasesEntries", () => {
     const basesData: BasesData = {};
     const view: BasesView = {
       type: "table",
-      order: ["priority"],
+      sort: [{ property: "priority", direction: "ASC" }],
     };
     const result = resolveBasesEntries(basesData, baseFiles, view);
     expect(result.entries.map((entry) => entry.slug)).toEqual(["notes/bravo", "notes/alpha"]);
+  });
+
+  it("without a sort, entries are in file name order: order only lists columns", () => {
+    const basesData: BasesData = {};
+    const view: BasesView = { type: "table", order: ["priority"] };
+    const result = resolveBasesEntries(basesData, [...baseFiles].reverse(), view);
+    expect(result.entries.map((entry) => entry.slug)).toEqual(["notes/alpha", "notes/bravo"]);
   });
 
   it("sorts entries by direction", () => {
@@ -796,11 +803,12 @@ describe("this context of a base embedded in a note", () => {
     expect(
       result.entries.map(({ fileProperties: f }) => [f.name, f.path, f.ext, f.folder]),
     ).toEqual([
+      // file name order, as in Obsidian
+      ["Board.base", "boards/Board.base", "base", "boards"],
+      ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
       ["note", "boards/note.md", "md", "boards"],
       ["Plan.canvas", "boards/Plan.canvas", "canvas", "boards"],
-      ["Diagram.excalidraw", "boards/Diagram.excalidraw", "excalidraw", "boards"],
       ["Sketch.excalidraw", "boards/Sketch.excalidraw.md", "md", "boards"],
-      ["Board.base", "boards/Board.base", "base", "boards"],
     ]);
 
     const canvases = resolveBasesEntries({ filters: 'file.ext == "canvas"' }, files);
