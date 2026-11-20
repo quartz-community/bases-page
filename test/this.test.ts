@@ -70,11 +70,20 @@ describe("this in an embedded base", () => {
   });
 });
 
-function transclusion(url: string, block = ""): HTMLRoot["children"][number] {
+function transclusion(
+  url: string,
+  block = "",
+  tagName: "div" | "blockquote" = "blockquote",
+): HTMLRoot["children"][number] {
   return {
     type: "element",
-    tagName: "blockquote",
-    properties: { className: ["transclude"], dataUrl: url, dataBlock: block },
+    tagName,
+    properties: {
+      className:
+        tagName === "div" ? ["transclude", "internal-embed", "markdown-embed"] : ["transclude"],
+      dataUrl: url,
+      dataBlock: block,
+    },
     children: [],
   };
 }
@@ -98,7 +107,8 @@ describe("several bases on one page (community PR #2)", () => {
       type: "root",
       children: [
         transclusion("thisprobe.base"),
-        transclusion("thisprobe.base", "#second"),
+        // obsidian-flavored-markdown 2.3+ renders transclusions as <div>
+        transclusion("thisprobe.base", "#second", "div"),
         {
           type: "element",
           tagName: "pre",
