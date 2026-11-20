@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.4.0
+
+### Minor Changes
+
+- 81c263e: Summaries match Obsidian. Custom summaries (a formula under the base's top-level `summaries:`, made with **Add summary**) are evaluated instead of showing only their name; their formulas see the column's values as `values`. Each summary cell shows the summary's name before its value, a grouped table has a summary row under each group's heading, and the built-in summaries give Obsidian's values: `Average` counts empty values, numbers are rounded to 2 decimals, `Earliest`, `Latest` and a date `Range` work, and a summary with nothing to summarise, or an unknown name, shows "Empty".
+
+  Formulas get `reduce(expression, initial)` with `acc`, and `index` in `map`, `filter` and the other list methods; `mean()` counts empty values, as in Obsidian.
+
+  Entries of a view without a `sort` are in file name order, as in Obsidian, instead of being sorted by their columns (`order`).
+
+- bb7e64f: A base transclusion that has no `![[…]]` in the note's source (e.g. a Markdown-form embed, `![](Demo.base)`) no longer shifts the views of the base embeds after it: each transclusion is paired with the `![[…]]` that has the same path and view (#39).
+
+  `file.size` is the file's size in bytes, as in Obsidian (#40).
+
+- baee8e5: More formulas work as in Obsidian:
+
+  - `html()` renders its HTML, `image()` shows the image (a URL, or a file in the vault such as `image("attachments/cover.png")`), and `icon()` shows the Lucide icon, instead of showing them as text.
+  - Regular expressions: `/pattern/flags` literals, `/re/.matches(text)`, `replace(/re/g, "$1")` and `split(/re/)`.
+  - `split(separator, n)` returns at most `n` parts, and `random()` exists.
+  - `link(…).linksTo(file)` works.
+  - `file.backlinks` lists the notes that link to the note, `file.links` no longer lists the note's tags, and `file.links`, `file.backlinks` and `file.embeds` columns show the linked notes by name.
+  - `file.properties` (and the `note` properties) hold the frontmatter as written, without the `title` and dates Quartz adds.
+
+  An image property holding a vault path (`attachments/cover.png`) resolves like a link on every page, not relative to the page.
+
+- 9e4a5fb: Views and grouping match Obsidian:
+
+  - `type: kanban` (Obsidian 1.14+) renders as a board, with its `columnWidth` and card covers from `image` (`imageFit`, `imageAspectRatio`).
+  - `groupOrder` shows only the listed groups, in that order (`null` is the group without a value).
+  - The group of entries without a value is labelled "None" and comes last (first in a kanban view).
+  - List and cards views show a heading per group when the view has `groupBy`.
+  - List views follow `markers` (`bullet`, `number`, `none`), `separator` and `indentProperties`.
+  - A table's `rowHeight` (`medium`, `tall`, `extra`) gives Obsidian's row heights.
+
 ## 1.3.1
 
 ### Patch Changes
