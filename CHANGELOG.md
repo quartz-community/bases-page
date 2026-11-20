@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1
+
+### Patch Changes
+
+- 1dc0d7c: Embedded bases (`![[file.base]]`) render again with obsidian-flavored-markdown 2.3, which renders transclusions as `<div class="transclude internal-embed markdown-embed">` instead of `<blockquote class="transclude">`. Both are recognised.
+
 ## 1.3.0
 
 ### Minor Changes
