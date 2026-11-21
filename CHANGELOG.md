@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.1
+
+### Patch Changes
+
+- 54324cf: Links in bases follow the site's `configuration.links`, like the note's own links: external links get the external-link icon (`externalLinkIcon`) and open in a new tab only with `openLinksInNewTab`, images load lazily only with `lazyLoad`, and links to notes from properties get `data-slug` (popovers and SPA navigation). This applies to embedded bases and to `.base` pages.
+- c8df754: A base inside a transcluded note (an inline ` ```base ` block or a `![[….base]]` embed) renders that note's own base, with `this` being that note as in Obsidian, instead of the host page's base with the same position (or nothing when the host has none).
+
 ## 1.5.0
 
 ### Minor Changes
