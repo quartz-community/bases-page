@@ -9,6 +9,7 @@ import type {
 } from "@quartz-community/types";
 import type { Root as HtmlRoot, Element, ElementContent } from "hast";
 import { visit } from "unist-util-visit";
+import { decorateLinks, linkSettings } from "./components/shared/decorate";
 import { render } from "preact-render-to-string";
 import { h, Fragment } from "preact";
 import { fromHtml } from "hast-util-from-html";
@@ -194,6 +195,8 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
         siteHasTagPages(componentData.ctx),
       );
       const fragment = fromHtml(htmlString, { fragment: true }) as HtmlRoot;
+      // the site's link settings, as the links built-in applies them to the note's own links
+      decorateLinks(fragment, linkSettings(componentData.cfg?.links), slug);
 
       // Replace the placeholder node's children with the rendered content
       node.tagName = "div";
