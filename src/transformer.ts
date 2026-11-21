@@ -108,6 +108,11 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
                 tagName: "div",
                 properties: {
                   dataQzBasesCodeblock: String(blockIndex),
+                  // the note the block belongs to: transcluded into another note, the
+                  // placeholder still refers to this note's blocks (and `this`)
+                  ...(typeof file.data.slug === "string"
+                    ? { dataQzBasesSource: file.data.slug }
+                    : {}),
                   ...(viewName ? { dataQzBasesView: viewName } : {}),
                   ...(viewName && rawMatches ? { dataQzBasesViewExact: "true" } : {}),
                 },
@@ -160,6 +165,11 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
                 tagName: "div",
                 properties: {
                   dataQzBasesCodeblock: String(blockIndex),
+                  // the note the block belongs to: transcluded into another note, the
+                  // placeholder still refers to this note's blocks (and `this`)
+                  ...(typeof file.data.slug === "string"
+                    ? { dataQzBasesSource: file.data.slug }
+                    : {}),
                 },
                 children: [],
               };
