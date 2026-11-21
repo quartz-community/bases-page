@@ -9,6 +9,7 @@ import type {
 } from "@quartz-community/types";
 import type { Root as HtmlRoot, Element, ElementContent } from "hast";
 import { visit } from "unist-util-visit";
+import { decorateLinks, linkSettings } from "./components/shared/decorate";
 import { render } from "preact-render-to-string";
 import { h, Fragment } from "preact";
 import { fromHtml } from "hast-util-from-html";
@@ -19,7 +20,7 @@ import type { SimpleSlug } from "@quartz-community/utils";
 import { parseBasesData } from "./parser";
 import { buildSelfContext, resolveBasesEntries } from "./resolver";
 import BasesBody from "./components/BasesBody";
-import type { BasesPageOptions, BasesData } from "./types";
+import type { BasesPageOptions, BasesData, QuartzPluginData } from "./types";
 import type { EvalContext } from "./compiler";
 import { registerBuiltinViews } from "./components/views";
 import { registerCustomViews, viewRegistry } from "./registry";
@@ -135,8 +136,7 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
 
   return (root: HtmlRoot, _slug: FullSlug, componentData: QuartzComponentProps) => {
     const fileData = componentData.fileData as Record<string, unknown>;
-    const basesBlocks = fileData.basesBlocks as BasesData[] | undefined;
-    if (!basesBlocks || basesBlocks.length === 0) return;
+    const allFilesForLookup = (componentData.allFiles ?? []) as QuartzPluginData[];
 
     // Ensure built-in views are registered
     if (!builtinViewsRegistered) {
@@ -159,14 +159,22 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
       const blockIndexStr = node.properties?.["dataQzBasesCodeblock"] as string | undefined;
       if (blockIndexStr === undefined) return;
 
+      // the note whose block this is: the page itself, or the note transcluded into it. As in
+      // Obsidian, `this` is that note too.
+      const source = node.properties?.["dataQzBasesSource"] as string | undefined;
+      const owner =
+        source && source !== fileData.slug
+          ? allFilesForLookup.find((file) => file.slug === source)
+          : fileData;
+      const ownerBlocks = owner?.basesBlocks as BasesData[] | undefined;
       const blockIndex = Number(blockIndexStr);
-      const basesData = basesBlocks[blockIndex];
-      if (!basesData) return;
+      const basesData = ownerBlocks?.[blockIndex];
+      if (!owner || !basesData) return;
 
       const viewName = node.properties?.["dataQzBasesView"] as string | undefined;
       const viewNameExact = node.properties?.["dataQzBasesViewExact"] !== undefined;
 
-      const selfContext = buildSelfContext(componentData.fileData);
+      const selfContext = buildSelfContext(owner);
 
       const baseSlugs = new Set(allSlugs.filter((s) => s.endsWith(".base")));
       const baseAliases = new Set([...baseSlugs].map((s) => s.replace(/\.base$/, "")));
@@ -187,6 +195,12 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
         siteHasTagPages(componentData.ctx),
       );
       const fragment = fromHtml(htmlString, { fragment: true }) as HtmlRoot;
+      // the site's link settings, as the links built-in applies them to the note's own links
+      decorateLinks(
+        fragment,
+        linkSettings((componentData.cfg as { links?: unknown } | undefined)?.links),
+        slug,
+      );
 
       // Replace the placeholder node's children with the rendered content
       node.tagName = "div";

@@ -8,6 +8,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { parseBasesData } from "./parser";
 import { extractNoteTags, frontmatterKeys } from "./tags";
+import { decorateLinks, linkSettings } from "./components/shared/decorate";
 import type { NoteTags } from "./tags";
 import type { BasesData, BasesPageOptions } from "./types";
 
@@ -26,6 +27,20 @@ import type { BasesData, BasesPageOptions } from "./types";
 export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>> = (_opts) => {
   return {
     name: "BasesTransformer",
+    // A .base page's views link like the site's notes: Quartz 5.1+ runs these on the page's
+    // rendered body (its links are made when it is rendered, after the links built-in ran)
+    virtualPageHtmlPlugins(ctx: BuildCtx) {
+      const settings = linkSettings(
+        (ctx.cfg?.configuration as { links?: unknown } | undefined)?.links,
+      );
+      return [
+        () => (tree: HTMLRoot, file: VFile) => {
+          const path = file.data.relativePath;
+          if (typeof path !== "string" || !path.toLowerCase().endsWith(".base")) return;
+          decorateLinks(tree, settings, typeof file.data.slug === "string" ? file.data.slug : "");
+        },
+      ];
+    },
     htmlPlugins(ctx: BuildCtx) {
       const baseFileBySlug = buildBaseFileLookup(ctx);
 
@@ -108,6 +123,11 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
                 tagName: "div",
                 properties: {
                   dataQzBasesCodeblock: String(blockIndex),
+                  // the note the block belongs to: transcluded into another note, the
+                  // placeholder still refers to this note's blocks (and `this`)
+                  ...(typeof file.data.slug === "string"
+                    ? { dataQzBasesSource: file.data.slug }
+                    : {}),
                   ...(viewName ? { dataQzBasesView: viewName } : {}),
                   ...(viewName && rawMatches ? { dataQzBasesViewExact: "true" } : {}),
                 },
@@ -160,6 +180,11 @@ export const BasesTransformer: QuartzTransformerPlugin<Partial<BasesPageOptions>
                 tagName: "div",
                 properties: {
                   dataQzBasesCodeblock: String(blockIndex),
+                  // the note the block belongs to: transcluded into another note, the
+                  // placeholder still refers to this note's blocks (and `this`)
+                  ...(typeof file.data.slug === "string"
+                    ? { dataQzBasesSource: file.data.slug }
+                    : {}),
                 },
                 children: [],
               };
