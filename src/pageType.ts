@@ -196,7 +196,11 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
       );
       const fragment = fromHtml(htmlString, { fragment: true }) as HtmlRoot;
       // the site's link settings, as the links built-in applies them to the note's own links
-      decorateLinks(fragment, linkSettings(componentData.cfg?.links), slug);
+      decorateLinks(
+        fragment,
+        linkSettings((componentData.cfg as { links?: unknown } | undefined)?.links),
+        slug,
+      );
 
       // Replace the placeholder node's children with the rendered content
       node.tagName = "div";
