@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.2
+
+### Patch Changes
+
+- b8dca38: View tabs are `role="tab"` with `aria-selected` (their `role="tablist"` had no tabs), and checkboxes for boolean properties are labelled with the property name.
+- 0c518cd: Group headings in table views name their property in `--darkgray` instead of `--gray`, which on the row's `--lightgray` background was below 4:1 contrast.
+
 ## 1.5.1
 
 ### Patch Changes
