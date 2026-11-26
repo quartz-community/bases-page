@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { freeIdPrefix, tabIndexForKey } from "./tabs";
 
 function setActiveView(page, index) {
   const tabs = page.querySelectorAll(".bases-view-tabs button");
@@ -8,6 +9,8 @@ function setActiveView(page, index) {
     const active = tab.dataset.viewIndex === String(index);
     tab.classList.toggle("is-active", active);
     tab.setAttribute("aria-selected", active ? "true" : "false");
+    // roving tabindex: only the selected tab is in the tab order
+    tab.tabIndex = active ? 0 : -1;
   });
   views.forEach((view) => {
     view.classList.toggle("is-active", view.dataset.viewIndex === String(index));
@@ -103,19 +106,77 @@ function initTables(page, cleanupFns) {
   });
 }
 
-function initTabs(page, cleanupFns) {
+/**
+ * Give the tabs and views of a base ids no earlier base on the page has (the same note or base
+ * can be on a page twice, e.g. transcluded), keeping each tab's aria-controls and each view's
+ * aria-labelledby pointing at the other.
+ */
+function uniqueTabIds(page, tabs, seen) {
+  const panelOf = (tab) => {
+    const index = tab.dataset.viewIndex;
+    return Array.from(page.querySelectorAll(".bases-view")).find(
+      (view) => view.dataset.viewIndex === index && view.closest(".bases-page") === page,
+    );
+  };
+  const pairs = Array.from(tabs, (tab) => [tab, panelOf(tab)]);
+  const ids = pairs.flatMap(([tab, panel]) => [tab.id, panel?.id].filter(Boolean));
+  if (ids.length > 0 && !ids.some((id) => seen.has(id))) {
+    ids.forEach((id) => seen.add(id));
+    return;
+  }
+  const base = (tabs[0].id || "bases-tab-0").replace(/-tab-\d+$/, "");
+  const prefix = freeIdPrefix(
+    base,
+    (p) =>
+      pairs.flatMap(([tab]) => [
+        `${p}-tab-${tab.dataset.viewIndex}`,
+        `${p}-view-${tab.dataset.viewIndex}`,
+      ]),
+    (id) => seen.has(id) || document.getElementById(id) !== null,
+  );
+  for (const [tab, panel] of pairs) {
+    const index = tab.dataset.viewIndex;
+    tab.id = `${prefix}-tab-${index}`;
+    seen.add(tab.id);
+    if (panel) {
+      panel.id = `${prefix}-view-${index}`;
+      seen.add(panel.id);
+      tab.setAttribute("aria-controls", panel.id);
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", tab.id);
+      if (!panel.hasAttribute("tabindex")) panel.tabIndex = 0;
+    }
+  }
+}
+
+function initTabs(page, cleanupFns, seenIds) {
   const tabs = page.querySelectorAll(".bases-view-tabs button");
   if (tabs.length === 0) return;
+  uniqueTabIds(page, tabs, seenIds);
   const initial = parseInt(page.dataset.initialView || "0", 10);
   setActiveView(page, Number.isNaN(initial) ? 0 : initial);
 
-  tabs.forEach((tab) => {
-    const handler = () => {
+  const list = Array.from(tabs);
+  list.forEach((tab, position) => {
+    const select = () => {
       const index = parseInt(tab.dataset.viewIndex || "0", 10);
       setActiveView(page, Number.isNaN(index) ? 0 : index);
     };
-    tab.addEventListener("click", handler);
-    cleanupFns.push(() => tab.removeEventListener("click", handler));
+    // Left/Right (wrapping), Home and End move to a tab and select it
+    const onKeydown = (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const next = tabIndexForKey(e.key, position, list.length);
+      if (next === undefined) return;
+      e.preventDefault();
+      list[next].focus();
+      list[next].click();
+    };
+    tab.addEventListener("click", select);
+    tab.addEventListener("keydown", onKeydown);
+    cleanupFns.push(() => {
+      tab.removeEventListener("click", select);
+      tab.removeEventListener("keydown", onKeydown);
+    });
   });
 }
 
@@ -123,9 +184,10 @@ function initBases() {
   const pages = document.querySelectorAll(".bases-page");
   if (pages.length === 0) return;
   const cleanupFns = [];
+  const seenIds = new Set();
 
   pages.forEach((page) => {
-    initTabs(page, cleanupFns);
+    initTabs(page, cleanupFns, seenIds);
     initTables(page, cleanupFns);
   });
 
