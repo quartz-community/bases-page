@@ -5,7 +5,9 @@ function setActiveView(page, index) {
   const views = page.querySelectorAll(".bases-view");
 
   tabs.forEach((tab) => {
-    tab.classList.toggle("is-active", tab.dataset.viewIndex === String(index));
+    const active = tab.dataset.viewIndex === String(index);
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-selected", active ? "true" : "false");
   });
   views.forEach((view) => {
     view.classList.toggle("is-active", view.dataset.viewIndex === String(index));
