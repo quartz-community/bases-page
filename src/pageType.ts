@@ -25,7 +25,7 @@ import type { EvalContext } from "./compiler";
 import { registerBuiltinViews } from "./components/views";
 import { registerCustomViews, viewRegistry } from "./registry";
 import { i18n } from "./i18n";
-import { ViewSelector } from "./components/ViewSelector";
+import { ViewSelector, viewPanelAttributes } from "./components/ViewSelector";
 import { escapeHtml, findEmbeddedView, initialViewIndex } from "./views";
 import { siteHasTagPages } from "./tagPages";
 
@@ -193,6 +193,9 @@ function createBasesCodeblockTransform(opts: BasesPageOptions | undefined): Tree
         selfContext,
         viewNameExact,
         siteHasTagPages(componentData.ctx),
+        // ids unique among the note's blocks (bases.inline.ts renames repeats, e.g. a note
+        // transcluded twice)
+        `bases-${source && source !== fileData.slug ? "embed-" : ""}${blockIndex}`,
       );
       const fragment = fromHtml(htmlString, { fragment: true }) as HtmlRoot;
       // the site's link settings, as the links built-in applies them to the note's own links
@@ -227,6 +230,7 @@ function renderBasesInline(
   selfContext?: EvalContext["self"],
   viewNameExact = false,
   tagPages?: boolean,
+  idPrefix = "bases",
 ): string {
   let views = basesData.views ?? [];
 
@@ -255,7 +259,7 @@ function renderBasesInline(
 
   // Render the view selector
   const selectorHtml = render(
-    h(Fragment, null, ViewSelector({ views, activeIndex: initialIndex, locale })),
+    h(Fragment, null, ViewSelector({ views, activeIndex: initialIndex, locale, idPrefix })),
   );
 
   // Render each view panel
@@ -292,7 +296,10 @@ function renderBasesInline(
       innerHtml = `<div class="bases-empty">Unknown view type: ${view.type}</div>`;
     }
 
-    return `<div class="bases-view${activeClass}" data-view-index="${index}" data-view-type="${view.type}">${innerHtml}</div>`;
+    const panel = Object.entries(viewPanelAttributes(idPrefix, index, views.length))
+      .map(([name, value]) => ` ${name}="${escapeHtml(String(value))}"`)
+      .join("");
+    return `<div class="bases-view${activeClass}"${panel} data-view-index="${index}" data-view-type="${view.type}">${innerHtml}</div>`;
   });
 
   const cssBlock = viewCssChunks.length > 0 ? `<style>${viewCssChunks.join("\n")}</style>` : "";

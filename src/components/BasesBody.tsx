@@ -8,7 +8,7 @@ import { resolveBasesEntries } from "../resolver";
 import type { EvalContext } from "../compiler";
 import { i18n } from "../i18n";
 import { registerCustomViews, viewRegistry } from "../registry";
-import { ViewSelector } from "./ViewSelector";
+import { ViewSelector, viewPanelAttributes } from "./ViewSelector";
 import { registerBuiltinViews } from "./views";
 import { initialViewIndex } from "../views";
 import { siteHasTagPages } from "../tagPages";
@@ -69,7 +69,7 @@ export default ((opts?: BasesPageOptions) => {
         {viewCssChunks.length > 0 && (
           <style dangerouslySetInnerHTML={{ __html: viewCssChunks.join("\n") }} />
         )}
-        <ViewSelector views={views} activeIndex={initialIndex} locale={locale} />
+        <ViewSelector views={views} activeIndex={initialIndex} locale={locale} idPrefix="bases" />
         <div class="bases-view-container">
           {views.map((view, index) => {
             const { entries, total } = resolveBasesEntries(
@@ -84,6 +84,7 @@ export default ((opts?: BasesPageOptions) => {
             return (
               <div
                 class={`bases-view ${index === initialIndex ? "is-active" : ""}`}
+                {...viewPanelAttributes("bases", index, views.length)}
                 data-view-index={index}
                 data-view-type={view.type}
               >
