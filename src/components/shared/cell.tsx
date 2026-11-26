@@ -170,7 +170,9 @@ export function renderCellValue(
   }
 
   if (typeof value === "boolean") {
-    return <input type="checkbox" checked={value} disabled />;
+    // A checkbox needs a name for screen readers: the property's.
+    const label = column?.replace(/^(note|file|formula)\./, "") || String(value);
+    return <input type="checkbox" checked={value} disabled aria-label={label} />;
   }
 
   if (typeof value === "number") {

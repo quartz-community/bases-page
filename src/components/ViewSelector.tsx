@@ -16,6 +16,8 @@ export function ViewSelector({ views, activeIndex }: ViewSelectorProps): Compone
       {views.map((view, index) => (
         <button
           type="button"
+          role="tab"
+          aria-selected={index === activeIndex ? "true" : "false"}
           class={index === activeIndex ? "is-active" : ""}
           data-view-index={index}
         >
