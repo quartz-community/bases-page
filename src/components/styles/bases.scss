@@ -159,7 +159,8 @@ th.is-sorted-desc .bases-table-header-sort {
 }
 
 .bases-table-group-property {
-  color: var(--gray);
+  // On the group row's --lightgray, --gray was below 4:1 contrast.
+  color: var(--darkgray);
   font-weight: 400;
 }
 
