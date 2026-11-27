@@ -696,3 +696,43 @@ export function compareForSort(a: unknown, b: unknown, locale = "en"): number {
       return collator(locale).compare(sortText(a), sortText(b));
   }
 }
+
+// ---------------------------------------------------------------------------- equality
+
+function numericOperand(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+}
+
+/**
+ * `==` as in Obsidian: a missing value equals null, a number equals the same number written
+ * as text or a boolean (`"5" == 5`, `1 == true`), lists are equal when their items are, dates
+ * when they are the same time. Text is compared exactly (case matters).
+ */
+export function looseEquals(left: unknown, right: unknown): boolean {
+  if (left instanceof TagValue) left = left.tag;
+  if (right instanceof TagValue) right = right.tag;
+  if (left === undefined || left === null || right === undefined || right === null) {
+    return (left === undefined || left === null) && (right === undefined || right === null);
+  }
+  if (left === right) return true;
+  if (left instanceof Date && right instanceof Date) return left.getTime() === right.getTime();
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((item, index) => looseEquals(item, right[index]));
+  }
+  const numeric = (v: unknown) => typeof v === "number" || typeof v === "boolean";
+  if (numeric(left) || numeric(right)) {
+    const l = numericOperand(left);
+    const r = numericOperand(right);
+    return l !== undefined && r !== undefined && l === r;
+  }
+  return false;
+}

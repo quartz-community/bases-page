@@ -10,6 +10,7 @@ import {
   dateHasTime,
   dateToString,
   isDuration,
+  looseEquals,
   parseDuration,
   parseIsoDate,
 } from "./values";
@@ -150,14 +151,8 @@ function compareValues(left: unknown, right: unknown, operator: string): boolean
     const r = asDate(right);
     if (l && r) return compareNumbers(l.getTime(), r.getTime(), operator);
   }
-  if (operator === "==") {
-    if (isDateValue(left) && isDateValue(right)) return left.getTime() === right.getTime();
-    return left === right;
-  }
-  if (operator === "!=") {
-    if (isDateValue(left) && isDateValue(right)) return left.getTime() !== right.getTime();
-    return left !== right;
-  }
+  if (operator === "==") return looseEquals(left, right);
+  if (operator === "!=") return !looseEquals(left, right);
 
   if (isDateValue(left) && isDateValue(right)) {
     const leftMs = left.getTime();
@@ -168,8 +163,10 @@ function compareValues(left: unknown, right: unknown, operator: string): boolean
     if (operator === "<=") return leftMs <= rightMs;
   }
 
-  const leftNum = toNumber(left);
-  const rightNum = toNumber(right);
+  // two strings compare as text ("10" > "9" is false), a string and a number as numbers
+  const bothText = typeof left === "string" && typeof right === "string";
+  const leftNum = bothText ? null : toNumber(left);
+  const rightNum = bothText ? null : toNumber(right);
   if (leftNum !== null && rightNum !== null) {
     if (operator === ">") return leftNum > rightNum;
     if (operator === "<") return leftNum < rightNum;

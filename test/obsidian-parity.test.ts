@@ -104,8 +104,8 @@ describe("filters (Obsidian parity)", () => {
     expect(evaluateFilter({ not: ["a == 1", "b == 1"] }, ctx({ a: 1, b: 0 }))).toBe(false);
   });
 
-  // bug: compareValues uses ===; in Obsidian "5" == 5 and 1 == true
-  it.fails("== compares a number with a numeric string and a boolean as Obsidian does", () => {
+  // in Obsidian "5" == 5 and 1 == true
+  it("== compares a number with a numeric string and a boolean as Obsidian does", () => {
     expect(evaluate('"5" == 5', ctx({}))).toBe(true);
     expect(evaluate("n == true", ctx({ n: 1 }))).toBe(true);
   });
@@ -120,9 +120,8 @@ describe("filters (Obsidian parity)", () => {
     expect(evaluate("![]", ctx({}))).toBe(true);
   });
 
-  // bug: compareValues compares with ===, and a missing property is undefined, not null, so
-  // the usual "has no status" filter `status == null` matches nothing (Obsidian: true)
-  it.fails("a missing property == null", () => {
+  // the usual "has no status" filter `status == null` (a missing property is null)
+  it("a missing property == null", () => {
     expect(evaluate("missing == null", ctx({}))).toBe(true);
     expect(evaluateFilter("status == null", ctx({ other: 1 }))).toBe(true);
   });
@@ -131,9 +130,20 @@ describe("filters (Obsidian parity)", () => {
     expect(evaluate("num != null", ctx({ num: 5 }))).toBe(true);
   });
 
-  // bug: compareValues turns both sides into numbers whenever it can; Obsidian compares two
-  // strings as text ("10" > "9" is false), and a string with a number as a number
-  it.fails('two strings compare as text: "10" > "9" is false', () => {
+  it("== between other types: text is exact, an empty string is no number", () => {
+    expect(evaluate('num == "5"', ctx({ num: 0 }))).toBe(false);
+    expect(evaluate('"" == 0', ctx({}))).toBe(false);
+    expect(evaluate('"Ab" == "ab"', ctx({}))).toBe(false);
+    expect(evaluate('["Ab"].contains("ab")', ctx({}))).toBe(false);
+    expect(evaluate("[1, 2] == [1, 3]", ctx({}))).toBe(false);
+    expect(evaluate("[1, 2] != [1, 2]", ctx({}))).toBe(false);
+    expect(evaluate("0 == null", ctx({}))).toBe(false);
+    expect(evaluate('date("2024-03-05") == "2024-03-05"', ctx({}))).toBe(true);
+  });
+
+  // Obsidian compares two strings as text ("10" > "9" is false), a string with a number as a
+  // number
+  it('two strings compare as text: "10" > "9" is false', () => {
     expect(evaluate('"10" > "9"', ctx({}))).toBe(false);
   });
 
@@ -141,8 +151,8 @@ describe("filters (Obsidian parity)", () => {
     expect(evaluate("n > 9", ctx({ n: "10" }))).toBe(true);
   });
 
-  // bug: list.contains() uses ===; in Obsidian [1, 2].contains("1") is true, as "1" == 1
-  it.fails('a list of numbers contains a numeric string: [1, 2].contains("1")', () => {
+  // in Obsidian [1, 2].contains("1") is true, as "1" == 1
+  it('a list of numbers contains a numeric string: [1, 2].contains("1")', () => {
     expect(evaluate('[1, 2].contains("1")', ctx({}))).toBe(true);
   });
 });
@@ -206,7 +216,7 @@ describe("values (Obsidian parity)", () => {
     expect(evaluate('"hello WORLD foo-bar".title()', ctx)).toBe("Hello World Foo-bar");
   });
 
-  it.fails("list == list compares the items", () => {
+  it("list == list compares the items", () => {
     expect(evaluate("[1, 2] == [1, 2]", ctx)).toBe(true);
   });
 

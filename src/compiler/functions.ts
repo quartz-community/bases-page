@@ -19,6 +19,7 @@ import {
   ImageValue,
   compareForSort,
   isEmptySortValue,
+  looseEquals,
 } from "./values";
 import { tagMatches } from "../tags";
 
@@ -271,7 +272,8 @@ function sameLinkTarget(left: { path: string }, right: { path: string }): boolea
 // list.contains(needle) / contains(list, needle): matches values, `this` / file values, and
 // wikilinks (e.g. this.file.asLink()) against list items that are links, slugs or names.
 function listContains(list: unknown[], needle: unknown, context: EvalContext): boolean {
-  if (list.includes(needle)) return true;
+  // as == does: [1, 2].contains("1") (Obsidian: true)
+  if (list.some((item) => looseEquals(item, needle))) return true;
   // a list of tags (file.tags, the tags property) contains a tag and its nested tags
   if (list.some(isTagValue)) {
     if (needle === undefined || needle === null) return false;
