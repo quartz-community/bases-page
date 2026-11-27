@@ -158,14 +158,35 @@ describe("filters (Obsidian parity)", () => {
 });
 
 describe("formulas (Obsidian parity)", () => {
-  // bug: resolveBasesEntries evaluates formulas once, in the order they are written, so a
-  // formula that uses one written after it sees null. Obsidian evaluates them on demand.
-  it.fails("a formula can use a formula defined after it", () => {
+  // Obsidian evaluates formulas on demand, whatever order they are written in
+  it("a formula can use a formula defined after it", () => {
     const { entries } = resolveBasesEntries(
       { formulas: { a: "formula.b + 1", b: "2" } },
       chapters.slice(0, 1),
     );
     expect(entries[0]?.formulaValues.a).toBe(3);
+  });
+
+  it("a formula that uses itself is an error, not a hang", () => {
+    const { entries } = resolveBasesEntries(
+      {
+        formulas: {
+          a: "formula.b + 1",
+          b: "formula.a + 1",
+          c: "formula.c",
+          d: "formula.e * 2",
+          e: "3",
+        },
+      },
+      chapters.slice(0, 1),
+    );
+    const values = entries[0]!.formulaValues;
+    expect(String(values.a)).toMatch(/^Error: Circular reference/);
+    expect(String(values.b)).toMatch(/^Error: Circular reference/);
+    expect(String(values.c)).toMatch(/^Error: Circular reference/);
+    expect(values.d).toBe(6);
+    // a plain object once the entry is resolved
+    expect(Object.getOwnPropertyDescriptor(values, "d")?.get).toBeUndefined();
   });
 
   it("a formula can use a formula defined before it", () => {

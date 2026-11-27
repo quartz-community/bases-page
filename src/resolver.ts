@@ -1,7 +1,7 @@
 import type { BasesData, BasesEntry, BasesView, QuartzPluginData, SortEntry } from "./types";
 import { evaluate, evaluateFilter, resolvePropertyValue } from "./compiler";
 import type { EvalContext } from "./compiler";
-import { TagValue, compareForSort, isEmptySortValue } from "./compiler/values";
+import { ErrorValue, TagValue, compareForSort, isEmptySortValue } from "./compiler/values";
 import { statSync } from "fs";
 import { slugTag } from "@quartz-community/utils";
 import { withHash } from "./tags";
@@ -194,6 +194,40 @@ function compareSort(a: unknown, b: unknown, descending: boolean, locale: string
   return descending ? -cmp : cmp;
 }
 
+/**
+ * An entry's formula values, each evaluated when first read and then kept. A formula that
+ * (indirectly) uses itself is an error value instead of a loop.
+ */
+function lazyFormulas(
+  formulas: Record<string, string>,
+  context: EvalContext,
+): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  const evaluating = new Set<string>();
+  for (const [name, expr] of Object.entries(formulas)) {
+    Object.defineProperty(values, name, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        if (evaluating.has(name)) {
+          return new ErrorValue(`Circular reference in formula "${name}"`);
+        }
+        evaluating.add(name);
+        const value = evaluate(expr, context);
+        evaluating.delete(name);
+        Object.defineProperty(values, name, {
+          value,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+        return value;
+      },
+    });
+  }
+  return values;
+}
+
 // As in Obsidian, entries without a sort are in file name order. `order` only lists the
 // columns: it doesn't sort.
 const BY_FILE_NAME: SortEntry[] = [
@@ -307,10 +341,11 @@ export function resolveBasesEntries(
       _fileLookup: fileLookup,
     };
 
-    // Evaluate formulas
-    for (const [name, expr] of Object.entries(formulas)) {
-      context.formula[name] = evaluate(expr, context);
-    }
+    // Evaluate formulas: on demand, so a formula can use one written after it (as in Obsidian)
+    context.formula = lazyFormulas(formulas, context);
+    context.formula = Object.fromEntries(
+      Object.keys(formulas).map((name) => [name, context.formula[name]]),
+    );
 
     // Apply global filters
     if (!evaluateFilter(basesData.filters, context)) continue;
