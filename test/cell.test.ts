@@ -152,6 +152,14 @@ describe("renderCellValue", () => {
     expect(result.props.children).toBeUndefined();
   });
 
+  it("renders an infinite number as ∞ and NaN as NaN, as Obsidian does", () => {
+    const shown = (v: number) =>
+      (renderCellValue(v, ctx) as { props: Record<string, unknown> }).props.children;
+    expect(shown(Infinity)).toBe("∞");
+    expect(shown(-Infinity)).toBe("-∞");
+    expect(shown(NaN)).toBeNaN();
+  });
+
   it("renders booleans as disabled checkboxes", () => {
     const result = renderCellValue(true, ctx) as { type: string; props: Record<string, unknown> };
     expect(result.type).toBe("input");

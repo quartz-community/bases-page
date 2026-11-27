@@ -176,7 +176,9 @@ export function renderCellValue(
   }
 
   if (typeof value === "number") {
-    return <span class="bases-number">{value}</span>;
+    // as in Obsidian, 1 / 0 shows as ∞
+    const shown = value === Infinity ? "∞" : value === -Infinity ? "-∞" : value;
+    return <span class="bases-number">{shown}</span>;
   }
 
   if (typeof value === "string") {

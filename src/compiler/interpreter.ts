@@ -84,6 +84,8 @@ function toNumber(value: unknown): number | null {
 function toStringValue(value: unknown): string {
   if (value === undefined || value === null) return "";
   if (value instanceof Date) return dateToString(value);
+  // "a" + [1, 2] is "a1, 2"
+  if (Array.isArray(value)) return value.map(toStringValue).join(", ");
   return String(value);
 }
 
@@ -243,6 +245,8 @@ function applyBinary(operator: string, left: unknown, right: unknown): unknown {
   }
 
   if (operator === "+") {
+    // [1] + [2] is [1, 2]
+    if (Array.isArray(left) && Array.isArray(right)) return [...left, ...right];
     if (typeof left === "string" || typeof right === "string") {
       return `${toStringValue(left)}${toStringValue(right)}`;
     }
@@ -270,14 +274,16 @@ function applyBinary(operator: string, left: unknown, right: unknown): unknown {
     const leftNum = toNumber(left);
     const rightNum = toNumber(right);
     if (leftNum === null || rightNum === null) return undefined;
-    return rightNum === 0 ? 0 : leftNum / rightNum;
+    // as in Obsidian (JavaScript): 1 / 0 is Infinity
+    return leftNum / rightNum;
   }
 
   if (operator === "%") {
     const leftNum = toNumber(left);
     const rightNum = toNumber(right);
     if (leftNum === null || rightNum === null) return undefined;
-    return rightNum === 0 ? 0 : leftNum % rightNum;
+    // 5 % 0 is NaN
+    return leftNum % rightNum;
   }
 
   return compareValues(left, right, operator);
@@ -352,6 +358,8 @@ function resolveMember(target: unknown, name: string): unknown {
         return target.getMinutes();
       case "second":
         return target.getSeconds();
+      case "millisecond":
+        return target.getMilliseconds();
       default:
         return undefined;
     }

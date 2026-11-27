@@ -102,10 +102,13 @@ function flattenArgs(args: unknown[]): unknown[] {
   return args;
 }
 
+// The numbers among the values: as in Obsidian, text is skipped, also numeric text
+// (["9", 4].max() is 4)
 function collectNumericArgs(args: unknown[]): number[] {
   const values = flattenArgs(args);
   const numbers: number[] = [];
   for (const value of values) {
+    if (typeof value === "string") continue;
     const numberValue = toNumber(value);
     if (numberValue !== null) numbers.push(numberValue);
   }
@@ -347,6 +350,12 @@ registerGlobalFunction("today", () => {
 
 registerGlobalFunction("number", ([value]) => {
   if (isDuration(value)) throw new FormulaError('Unable to convert "Duration" to a number.');
+  if (typeof value === "string") {
+    // as in Obsidian: the leading number ("12abc" is 12, "0x10" is 0); "" is an error
+    if (!value.trim()) throw new FormulaError(`Unable to parse "${value}" as a number.`);
+    const parsed = parseFloat(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
   const numberValue = toNumber(value);
   return numberValue === null ? undefined : numberValue;
 });
@@ -487,8 +496,10 @@ function stringContains(target: unknown, needle: unknown, context: EvalContext):
   const needleLink = resolveLink(needle, context);
   const valueLink = needleLink ? resolveLink(value, context) : null;
   if (needleLink && valueLink && sameLinkTarget(valueLink, needleLink)) return true;
-  // as in Obsidian, a string contains a text ignoring case
-  return value.toLowerCase().includes(toStringValue(needle).toLowerCase());
+  // as in Obsidian, a string contains a text ignoring case; it never contains ""
+  const text = toStringValue(needle);
+  if (!text) return false;
+  return value.toLowerCase().includes(text.toLowerCase());
 }
 
 registerMethodFunction("string", "contains", (target, [needle], context) =>
@@ -622,10 +633,8 @@ registerMethodFunction("date", "isEmpty", (target) => {
 
 registerMethodFunction("list", "sum", (target) => {
   if (!Array.isArray(target)) return undefined;
-  return target.reduce((total, item) => {
-    const value = toNumber(item);
-    return value === null ? total : total + value;
-  }, 0);
+  // as in Obsidian, text is skipped (["1", 2, "x"].sum() is 2)
+  return collectNumericArgs(target).reduce((total, value) => total + value, 0);
 });
 
 registerMethodFunction("list", "mean", (target) => {
@@ -633,9 +642,9 @@ registerMethodFunction("list", "mean", (target) => {
   const numbers = collectNumericArgs(target);
   if (numbers.length === 0) return undefined;
   const sum = numbers.reduce((total, value) => total + value, 0);
-  // as in Obsidian, an empty value counts (as 0): [80, null].mean() is 40
-  const empty = target.filter((item) => item === null || item === undefined).length;
-  return sum / (numbers.length + empty);
+  // as in Obsidian, an empty value or text counts as 0: [80, null].mean() is 40,
+  // ["2", 4].mean() is 2
+  return sum / target.length;
 });
 
 registerMethodFunction("list", "count", (target) => (Array.isArray(target) ? target.length : 0));
@@ -707,8 +716,12 @@ registerMethodFunction("string", "linksTo", (target, [file], context) => {
 });
 
 registerMethodFunction("string", "title", (target) => {
-  const value = toStringValue(target);
-  return value.replace(/\b\w/g, (ch) => ch.toUpperCase());
+  // as in Obsidian: each space-separated word capitalised, the rest lowercase
+  // ("hello WORLD foo-bar" is "Hello World Foo-bar")
+  return toStringValue(target)
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 });
 
 registerMethodFunction("string", "asFile", (target, _args, context) => {
@@ -776,7 +789,14 @@ registerMethodFunction("list", "sort", (target, _args, context) => {
 
 registerMethodFunction("list", "unique", (target) => {
   if (!Array.isArray(target)) return undefined;
-  return [...new Set(target)];
+  // as in Obsidian: equal dates are one; 1 and "1" are not ([1, "1", 1].unique() is 1, "1")
+  const seen = new Set<unknown>();
+  return target.filter((item) => {
+    const key = item instanceof Date ? `date:${item.getTime()}` : item;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 });
 
 registerMethodFunction("number", "isEmpty", (target) => {

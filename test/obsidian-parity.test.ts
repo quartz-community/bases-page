@@ -236,17 +236,16 @@ describe("formulas (Obsidian parity)", () => {
 describe("values (Obsidian parity)", () => {
   const ctx: EvalContext = { note: {}, file: {} as never, formula: {} };
 
-  it.fails("date.millisecond is the date's milliseconds", () => {
+  it("date.millisecond is the date's milliseconds", () => {
     expect(evaluate('date("2024-03-05 14:30:15.250").millisecond', ctx)).toBe(250);
   });
 
-  // bug: applyBinary returns 0 for x / 0 and x % 0
-  it.fails("division by zero is Infinity and modulo by zero NaN", () => {
+  it("division by zero is Infinity and modulo by zero NaN", () => {
     expect(evaluate("1 / 0", ctx)).toBe(Infinity);
     expect(evaluate("5 % 0", ctx)).toBeNaN();
   });
 
-  it.fails("title() capitalises words separated by spaces and lowercases the rest", () => {
+  it("title() capitalises words separated by spaces and lowercases the rest", () => {
     expect(evaluate('"hello WORLD foo-bar".title()', ctx)).toBe("Hello World Foo-bar");
   });
 
@@ -255,32 +254,44 @@ describe("values (Obsidian parity)", () => {
   });
 
   // Obsidian's sum(), mean() and max() skip strings, also numeric ones (mean counts them as 0)
-  it.fails("sum(), mean() and max() use only numbers", () => {
+  it("sum(), mean() and max() use only numbers", () => {
     expect(evaluate('["1", 2, "x"].sum()', ctx)).toBe(2);
     expect(evaluate('["2", 4].mean()', ctx)).toBe(2);
     expect(evaluate('["9", 4].max()', ctx)).toBe(4);
   });
 
-  it.fails("list + list concatenates", () => {
+  it("list + list concatenates", () => {
     expect(evaluate("[1] + [2]", ctx)).toEqual([1, 2]);
   });
 
-  it.fails('a string does not contain "" (Obsidian: false)', () => {
+  it('a string does not contain "" (Obsidian: false)', () => {
     expect(evaluate('"abc".contains("")', ctx)).toBe(false);
   });
 
-  it.fails("unique() removes equal dates", () => {
+  it("unique() removes equal dates", () => {
     expect(evaluate('[date("2024-01-01"), date("2024-01-01")].unique().length', ctx)).toBe(1);
   });
 
   // Obsidian's number() reads a leading number, like parseFloat
-  it.fails('number("12abc") is 12, number("0x10") is 0', () => {
+  it('number("12abc") is 12, number("0x10") is 0', () => {
     expect(evaluate('number("12abc")', ctx)).toBe(12);
     expect(evaluate('number("0x10")', ctx)).toBe(0);
   });
 
   it("number() reads a number with surrounding spaces", () => {
     expect(evaluate('number(" 12 ")', ctx)).toBe(12);
+    expect(evaluate('number("1e3")', ctx)).toBe(1000);
+    expect(evaluate("number(true)", ctx)).toBe(1);
+  });
+
+  it('number("") is an error', () => {
+    expect(String(evaluate('number("")', ctx))).toBe('Error: Unable to parse "" as a number.');
+  });
+
+  it('unique() keeps 1 and "1" apart; text + list joins the list', () => {
+    expect(evaluate('[1, "1", 1, "a", "a"].unique()', ctx)).toEqual([1, "1", "a"]);
+    expect(evaluate('"a" + [1, 2]', ctx)).toBe("a1, 2");
+    expect(evaluate('"abc".startsWith("")', ctx)).toBe(true);
   });
 });
 
