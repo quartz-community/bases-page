@@ -176,7 +176,9 @@ export function renderCellValue(
   }
 
   if (typeof value === "number") {
-    return <span class="bases-number">{value}</span>;
+    // as in Obsidian, 1 / 0 shows as ∞
+    const shown = value === Infinity ? "∞" : value === -Infinity ? "-∞" : value;
+    return <span class="bases-number">{shown}</span>;
   }
 
   if (typeof value === "string") {
@@ -226,6 +228,19 @@ export function renderCellValue(
   }
 
   return String(value);
+}
+
+/**
+ * A group's heading: its value as Obsidian shows it, as a cell would (a date in the site's
+ * date format, a duration humanized, a link by its note's name), or the "None" label.
+ */
+export function renderGroupLabel(
+  group: { label: string; isEmpty: boolean; value?: unknown },
+  ctx: RenderCtx,
+  property?: string,
+): ComponentChild {
+  if (group.isEmpty || group.value === undefined) return group.label;
+  return renderCellValue(group.value, ctx, property);
 }
 
 export function isEmptyValue(value: unknown): boolean {

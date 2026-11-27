@@ -5,7 +5,7 @@ import { parse } from "./parser";
 import { interpret, resolvePropertyValue } from "./interpreter";
 import type { CompiledExpression } from "./compiler";
 import type { EvalContext } from "./interpreter";
-import { ErrorValue, FormulaError } from "./values";
+import { ErrorValue, FormulaError, isTruthy } from "./values";
 
 export function compile(expression: string): CompiledExpression {
   const tokens = lex(expression);
@@ -28,7 +28,7 @@ export function evaluateFilter(node: FilterNode | undefined, context: EvalContex
   if (!node) return true;
   if (typeof node === "string") {
     const result = evaluate(node, context);
-    return !(result instanceof ErrorValue) && Boolean(result);
+    return !(result instanceof ErrorValue) && isTruthy(result);
   }
   if ("and" in node) {
     return node.and.every((child) => evaluateFilter(child, context));
@@ -37,7 +37,8 @@ export function evaluateFilter(node: FilterNode | undefined, context: EvalContex
     return node.or.some((child) => evaluateFilter(child, context));
   }
   if ("not" in node) {
-    return !node.not.every((child) => evaluateFilter(child, context));
+    // "none of the following are true", as in Obsidian
+    return !node.not.some((child) => evaluateFilter(child, context));
   }
   return true;
 }

@@ -352,7 +352,8 @@ function humanizeUnits(duration: Duration): {
   const months = Math.abs(duration.months);
   const days = Math.abs(duration.days);
   const ms = Math.abs(duration.ms);
-  const totalDays = days + months * DAYS_PER_MONTH + ms / MS.day;
+  // moment's as("d") rounds the months to whole days first
+  const totalDays = days + Math.round(months * DAYS_PER_MONTH) + ms / MS.day;
   const totalMonths = months + (days + ms / MS.day) / DAYS_PER_MONTH;
   return {
     s: Math.round(totalDays * 86_400),
@@ -431,10 +432,23 @@ export function humanizeDuration(duration: Duration, locale = "en"): string {
   }
 }
 
-/** moment's `fromNow()`: `3 years ago`, `in 2 days`. */
+/**
+ * moment's difference between two moments as a duration: the whole calendar months from the
+ * earlier to the later one, and the milliseconds left (negative when `to` is earlier).
+ */
+function momentsDifference(from: Date, to: Date): Duration {
+  const sign = to.getTime() >= from.getTime() ? 1 : -1;
+  const [base, other] = sign > 0 ? [from, to] : [to, from];
+  let months = other.getMonth() - base.getMonth() + (other.getFullYear() - base.getFullYear()) * 12;
+  if (addMonthsClamped(base, months).getTime() > other.getTime()) months -= 1;
+  const ms = other.getTime() - addMonthsClamped(base, months).getTime();
+  return new Duration({ months: sign * months, ms: sign * ms });
+}
+
+/** moment's `fromNow()`: `3 years ago`, `in 2 days` (calendar months, as moment counts them). */
 export function relativeFromNow(date: Date, locale = "en", now = new Date()): string {
   const diff = date.getTime() - now.getTime();
-  const [unit, count] = relativeUnit(Duration.fromMilliseconds(diff));
+  const [unit, count] = relativeUnit(momentsDifference(now, date));
   if (isEnglish(locale)) {
     const text = EN_RELATIVE[unit].replace("%d", String(count));
     return diff < 0 || (diff === 0 && unit === "s") ? `${text} ago` : `in ${text}`;
@@ -483,7 +497,7 @@ export function displayDate(date: Date, locale = "en-US"): string {
 }
 
 const FORMAT_TOKEN_RE =
-  /\[([^\]]*)\]|LLLL|LLL|LL|LTS|LT|L|YYYY|YY|MMMM|MMM|MM|Mo|M|Do|DDDD|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|A|a|ZZ|Z|X|x/g;
+  /\[([^\]]*)\]|LLLL|LLL|LL|LTS|LT|L|YYYY|YY|MMMM|MMM|MM|Mo|M|Do|DDDD|DDD|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|A|a|ZZ|Z|X|x/g;
 
 function ordinal(n: number, locale: string): string {
   if (!locale.toLowerCase().startsWith("en")) return `${n}.`;
@@ -497,6 +511,12 @@ function zoneOffset(date: Date, separator: string): string {
   const sign = offset >= 0 ? "+" : "-";
   const abs = Math.abs(offset);
   return `${sign}${pad(Math.floor(abs / 60))}${separator}${pad(abs % 60)}`;
+}
+
+/** The day of the year (1 January is 1), whatever the time of day and DST. */
+function dayOfYear(date: Date): number {
+  const day = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.round((day - Date.UTC(date.getFullYear(), 0, 1)) / 86_400_000) + 1;
 }
 
 /** moment's `format()` with the common tokens, month and day names in the site's locale. */
@@ -533,10 +553,10 @@ export function formatMoment(date: Date, format: string, locale = "en-US"): stri
         return String(date.getMonth() + 1);
       case "Do":
         return ordinal(date.getDate(), locale);
-      case "DDDD": {
-        const start = new Date(date.getFullYear(), 0, 1);
-        return pad(Math.round((date.getTime() - start.getTime()) / 86_400_000) + 1, 3);
-      }
+      case "DDDD":
+        return pad(dayOfYear(date), 3);
+      case "DDD":
+        return String(dayOfYear(date));
       case "DD":
         return pad(date.getDate());
       case "D":
@@ -546,7 +566,10 @@ export function formatMoment(date: Date, format: string, locale = "en-US"): stri
       case "ddd":
         return intl(date, locale, { weekday: "short" });
       case "dd":
-        return intl(date, locale, { weekday: "narrow" });
+        // moment's two-letter weekday (Tu, Di, ma): the short name's first two letters
+        return Array.from(intl(date, locale, { weekday: "short" }).replace(/\.$/, ""))
+          .slice(0, 2)
+          .join("");
       case "d":
         return String(date.getDay());
       case "HH":
@@ -627,4 +650,110 @@ export class IconValue {
   toString(): string {
     return this.name;
   }
+}
+
+// ---------------------------------------------------------------------------- sorting
+
+const collators = new Map<string, Intl.Collator>();
+function collator(locale: string): Intl.Collator {
+  let found = collators.get(locale);
+  if (!found) {
+    try {
+      found = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+    } catch {
+      found = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+    }
+    collators.set(locale, found);
+  }
+  return found;
+}
+
+/** A value's number when sorting: numbers, dates (epoch ms) and durations (ms) compare by value. */
+function sortNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (value instanceof Date) return value.getTime();
+  if (isDuration(value)) return value.totalMilliseconds();
+  return undefined;
+}
+
+function sortText(value: unknown): string {
+  if (Array.isArray(value)) return value.map(sortText).join(", ");
+  // as Obsidian writes them: 2024-03-05, 2024-03-05T14:30:00
+  if (value instanceof Date) return dateToString(value);
+  if (value && typeof value === "object" && !(value instanceof TagValue)) {
+    const rec = value as { name?: unknown; toString(): string };
+    // a file value sorts by its name
+    if (typeof rec.name === "string" && "path" in (value as object)) return rec.name;
+  }
+  return String(value);
+}
+
+/** Whether a value counts as having no value when sorting (it then goes last). */
+export function isEmptySortValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === "number" && Number.isNaN(value)) ||
+    (value instanceof Date && Number.isNaN(value.getTime()))
+  );
+}
+
+/**
+ * Compares two (non-empty) values as Obsidian sorts them: two numbers, dates or durations by
+ * value (a date as its epoch milliseconds, a duration as milliseconds); anything else as text,
+ * naturally ("Chapter 2" before "Chapter 10", case ignored), with dates written as
+ * `2024-03-05`, durations as `4 days` and booleans as `true`/`false`. So
+ * `[true, 5, "b", date("2024-01-01"), 2, "A", false].sort()` is 2, 5, 2024-01-01, A, b, false, true.
+ */
+export function compareForSort(a: unknown, b: unknown, locale = "en"): number {
+  const numberA = sortNumber(a);
+  const numberB = sortNumber(b);
+  if (numberA !== undefined && numberB !== undefined) return numberA - numberB;
+  return collator(locale).compare(sortText(a), sortText(b));
+}
+
+// ---------------------------------------------------------------------------- equality
+
+function numericOperand(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+}
+
+/**
+ * `==` as in Obsidian: a missing value equals null, a number equals the same number written
+ * as text or a boolean (`"5" == 5`, `1 == true`), lists are equal when their items are, dates
+ * when they are the same time. Text is compared exactly (case matters).
+ */
+export function looseEquals(left: unknown, right: unknown): boolean {
+  if (left instanceof TagValue) left = left.tag;
+  if (right instanceof TagValue) right = right.tag;
+  if (left === undefined || left === null || right === undefined || right === null) {
+    return (left === undefined || left === null) && (right === undefined || right === null);
+  }
+  if (left === right) return true;
+  if (left instanceof Date && right instanceof Date) return left.getTime() === right.getTime();
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((item, index) => looseEquals(item, right[index]));
+  }
+  const numeric = (v: unknown) => typeof v === "number" || typeof v === "boolean";
+  if (numeric(left) || numeric(right)) {
+    const l = numericOperand(left);
+    const r = numericOperand(right);
+    return l !== undefined && r !== undefined && l === r;
+  }
+  return false;
+}
+
+/** Truthiness as in Obsidian's formulas: JavaScript's, except that an empty list is false. */
+export function isTruthy(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  return Boolean(value);
 }

@@ -1,7 +1,7 @@
 import type { BasesData, BasesEntry, BasesView, QuartzPluginData, SortEntry } from "./types";
-import { evaluate, evaluateFilter, isDuration, resolvePropertyValue } from "./compiler";
+import { evaluate, evaluateFilter, resolvePropertyValue } from "./compiler";
 import type { EvalContext } from "./compiler";
-import { TagValue } from "./compiler/values";
+import { ErrorValue, TagValue, compareForSort, isEmptySortValue } from "./compiler/values";
 import { statSync } from "fs";
 import { slugTag } from "@quartz-community/utils";
 import { withHash } from "./tags";
@@ -182,17 +182,50 @@ export function buildSelfContext(fileData: QuartzPluginData): NonNullable<EvalCo
   return selfContextFor(evalFile(buildFileProperties(fileData, slug, frontmatter), properties));
 }
 
-function compareSort(a: unknown, b: unknown): number {
-  if (a === b) return 0;
-  if (a === undefined || a === null) return 1;
-  if (b === undefined || b === null) return -1;
-  if (typeof a === "number" && typeof b === "number") return a - b;
-  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
-  if (isDuration(a) && isDuration(b)) return a.totalMilliseconds() - b.totalMilliseconds();
-  const dateA = typeof a === "string" ? Date.parse(a) : NaN;
-  const dateB = typeof b === "string" ? Date.parse(b) : NaN;
-  if (!Number.isNaN(dateA) && !Number.isNaN(dateB)) return dateA - dateB;
-  return String(a).localeCompare(String(b));
+/**
+ * One sort key: empty values last in either direction (as in Obsidian), the others by
+ * compareForSort, reversed for DESC.
+ */
+function compareSort(a: unknown, b: unknown, descending: boolean, locale: string): number {
+  const emptyA = isEmptySortValue(a);
+  const emptyB = isEmptySortValue(b);
+  if (emptyA || emptyB) return emptyA === emptyB ? 0 : emptyA ? 1 : -1;
+  const cmp = compareForSort(a, b, locale);
+  return descending ? -cmp : cmp;
+}
+
+/**
+ * An entry's formula values, each evaluated when first read and then kept. A formula that
+ * (indirectly) uses itself is an error value instead of a loop.
+ */
+function lazyFormulas(
+  formulas: Record<string, string>,
+  context: EvalContext,
+): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  const evaluating = new Set<string>();
+  for (const [name, expr] of Object.entries(formulas)) {
+    Object.defineProperty(values, name, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        if (evaluating.has(name)) {
+          return new ErrorValue("Infinite loop detected in formula");
+        }
+        evaluating.add(name);
+        const value = evaluate(expr, context);
+        evaluating.delete(name);
+        Object.defineProperty(values, name, {
+          value,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+        return value;
+      },
+    });
+  }
+  return values;
 }
 
 // As in Obsidian, entries without a sort are in file name order. `order` only lists the
@@ -213,12 +246,11 @@ function buildSortKeys(view?: BasesView): SortEntry[] {
   return BY_FILE_NAME;
 }
 
-function sortEntries(entries: BasesEntry[], view?: BasesView): BasesEntry[] {
+function sortEntries(entries: BasesEntry[], view?: BasesView, locale = "en"): BasesEntry[] {
   const sortKeys = buildSortKeys(view);
 
   return [...entries].sort((left, right) => {
     for (const key of sortKeys) {
-      const sign = key.direction === "DESC" ? -1 : 1;
       const leftValue = resolvePropertyValue(key.property, {
         note: left.properties,
         file: left.fileProperties,
@@ -229,8 +261,8 @@ function sortEntries(entries: BasesEntry[], view?: BasesView): BasesEntry[] {
         file: right.fileProperties,
         formula: right.formulaValues,
       });
-      const cmp = compareSort(leftValue, rightValue);
-      if (cmp !== 0) return sign * cmp;
+      const cmp = compareSort(leftValue, rightValue, key.direction === "DESC", locale);
+      if (cmp !== 0) return cmp;
     }
     return 0;
   });
@@ -309,10 +341,11 @@ export function resolveBasesEntries(
       _fileLookup: fileLookup,
     };
 
-    // Evaluate formulas
-    for (const [name, expr] of Object.entries(formulas)) {
-      context.formula[name] = evaluate(expr, context);
-    }
+    // Evaluate formulas: on demand, so a formula can use one written after it (as in Obsidian)
+    context.formula = lazyFormulas(formulas, context);
+    context.formula = Object.fromEntries(
+      Object.keys(formulas).map((name) => [name, context.formula[name]]),
+    );
 
     // Apply global filters
     if (!evaluateFilter(basesData.filters, context)) continue;
@@ -348,7 +381,7 @@ export function resolveBasesEntries(
   }
 
   const total = entries.length;
-  const sorted = sortEntries(entries, view);
+  const sorted = sortEntries(entries, view, locale);
   const limited = view?.limit ? sorted.slice(0, view.limit) : sorted;
   return { entries: limited, total };
 }

@@ -6,6 +6,8 @@ export interface EntryGroup {
   label: string;
   /** Whether this is the group of entries without a value */
   isEmpty: boolean;
+  /** The group's value (its first entry's), for showing it as a cell does */
+  value?: unknown;
   entries: BasesEntry[];
 }
 
@@ -37,7 +39,7 @@ export function groupViewEntries(
       empty.entries.push(entry);
       continue;
     }
-    const group = groups.get(label) ?? { label, isEmpty: false, entries: [] };
+    const group = groups.get(label) ?? { label, isEmpty: false, value, entries: [] };
     group.entries.push(entry);
     groups.set(label, group);
   }

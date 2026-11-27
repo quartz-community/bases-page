@@ -37,7 +37,9 @@ describe("evaluate", () => {
     expect(evaluate("10 % 3", context)).toBe(1);
     expect(evaluate("7 % 2", context)).toBe(1);
     expect(evaluate("10 % 5", context)).toBe(0);
-    expect(evaluate("10 % 0", context)).toBe(0);
+    // as in Obsidian (probe): x % 0 is NaN, x / 0 Infinity
+    expect(evaluate("10 % 0", context)).toBeNaN();
+    expect(evaluate("10 / 0", context)).toBe(Infinity);
   });
 
   it("evaluates string concatenation", () => {

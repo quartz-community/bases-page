@@ -17,6 +17,10 @@ import {
   HtmlValue,
   IconValue,
   ImageValue,
+  compareForSort,
+  isEmptySortValue,
+  isTruthy,
+  looseEquals,
 } from "./values";
 import { tagMatches } from "../tags";
 
@@ -98,10 +102,15 @@ function flattenArgs(args: unknown[]): unknown[] {
   return args;
 }
 
+/**
+ * The numbers among the values for sum/mean/min/max: as in Obsidian, text is skipped, also
+ * numeric text (["9", 4].max() is 4), and so are booleans ([true, 0].max() is 0).
+ */
 function collectNumericArgs(args: unknown[]): number[] {
   const values = flattenArgs(args);
   const numbers: number[] = [];
   for (const value of values) {
+    if (typeof value === "string" || typeof value === "boolean") continue;
     const numberValue = toNumber(value);
     if (numberValue !== null) numbers.push(numberValue);
   }
@@ -269,7 +278,8 @@ function sameLinkTarget(left: { path: string }, right: { path: string }): boolea
 // list.contains(needle) / contains(list, needle): matches values, `this` / file values, and
 // wikilinks (e.g. this.file.asLink()) against list items that are links, slugs or names.
 function listContains(list: unknown[], needle: unknown, context: EvalContext): boolean {
-  if (list.includes(needle)) return true;
+  // as == does: [1, 2].contains("1") (Obsidian: true)
+  if (list.some((item) => looseEquals(item, needle))) return true;
   // a list of tags (file.tags, the tags property) contains a tag and its nested tags
   if (list.some(isTagValue)) {
     if (needle === undefined || needle === null) return false;
@@ -313,7 +323,7 @@ function getMethodTarget(value: unknown): MethodTarget | undefined {
 }
 
 registerGlobalFunction("if", ([cond, whenTrue, whenFalse]) => {
-  return cond ? whenTrue : whenFalse;
+  return isTruthy(cond) ? whenTrue : whenFalse;
 });
 
 registerGlobalFunction("contains", ([haystack, needle], context) => {
@@ -342,17 +352,39 @@ registerGlobalFunction("today", () => {
 
 registerGlobalFunction("number", ([value]) => {
   if (isDuration(value)) throw new FormulaError('Unable to convert "Duration" to a number.');
+  if (Array.isArray(value)) throw new FormulaError('Unable to convert "List" to a number.');
+  // as in Obsidian: a date is its epoch milliseconds
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string") {
+    // as in Obsidian: the leading number ("12abc" is 12, "0x10" is 0); "" and "abc" are errors
+    const parsed = parseFloat(value);
+    if (Number.isNaN(parsed)) throw new FormulaError(`Unable to parse "${value}" as a number.`);
+    return parsed;
+  }
   const numberValue = toNumber(value);
   return numberValue === null ? undefined : numberValue;
 });
 
+/** As in Obsidian, the global min()/max() take numbers only: a boolean or a date is a type error. */
+function checkNumberInputs(name: string, args: unknown[]): void {
+  for (const value of flattenArgs(args)) {
+    if (typeof value === "boolean" || value instanceof Date) {
+      throw new FormulaError(
+        `Type error in "${name}", parameter "inputs". Expected Number, given ${typeNameOf(value)}.`,
+      );
+    }
+  }
+}
+
 registerGlobalFunction("min", (args) => {
+  checkNumberInputs("min", args);
   const numbers = collectNumericArgs(args);
   if (numbers.length === 0) return undefined;
   return Math.min(...numbers);
 });
 
 registerGlobalFunction("max", (args) => {
+  checkNumberInputs("max", args);
   const numbers = collectNumericArgs(args);
   if (numbers.length === 0) return undefined;
   return Math.max(...numbers);
@@ -400,10 +432,12 @@ registerGlobalFunction("escapeHTML", ([value]) => {
     .replace(/'/g, "&#39;");
 });
 
-registerGlobalFunction("file", ([path]) => {
+// the vault's file at that path (with its tags, links and properties), as in Obsidian
+registerGlobalFunction("file", ([path], context) => {
   if (typeof path !== "string") return undefined;
   if (!path.trim()) return undefined;
-  return buildFileValue(path);
+  const found = lookupFile(path, context);
+  return found ? { ...found } : buildFileValue(path);
 });
 
 // As in Obsidian: true if the file has any of the tags or one of their nested tags,
@@ -454,13 +488,16 @@ registerMethodFunction("file", "inFolder", (target, [folder]) => {
   return target.folder === normalized || target.folder.startsWith(`${normalized}/`);
 });
 
-registerMethodFunction("file", "hasProperty", (_target, [prop], context) => {
+registerMethodFunction("file", "hasProperty", (file, [prop], context) => {
   const value = toStringValue(prop);
   if (!value) return false;
   // Obsidian treats hasProperty as "does the key exist in frontmatter?" regardless
-  // of whether the value is null/undefined/falsy.
+  // of whether the value is null/undefined/falsy. The file's own properties: this.file's are
+  // the embedding note's.
   const parts = value.split(".");
-  let target: unknown = context.note;
+  // (a file not in the vault has none)
+  const own = isRecord(file) ? file.properties : undefined;
+  let target: unknown = isRecord(own) ? own : file === context.file ? context.note : {};
   for (const part of parts) {
     if (!isRecord(target)) return false;
     if (!Object.hasOwn(target, part)) return false;
@@ -477,8 +514,10 @@ function stringContains(target: unknown, needle: unknown, context: EvalContext):
   const needleLink = resolveLink(needle, context);
   const valueLink = needleLink ? resolveLink(value, context) : null;
   if (needleLink && valueLink && sameLinkTarget(valueLink, needleLink)) return true;
-  // as in Obsidian, a string contains a text ignoring case
-  return value.toLowerCase().includes(toStringValue(needle).toLowerCase());
+  // as in Obsidian, a string contains a text ignoring case; it never contains ""
+  const text = toStringValue(needle);
+  if (!text) return false;
+  return value.toLowerCase().includes(text.toLowerCase());
 }
 
 registerMethodFunction("string", "contains", (target, [needle], context) =>
@@ -612,10 +651,11 @@ registerMethodFunction("date", "isEmpty", (target) => {
 
 registerMethodFunction("list", "sum", (target) => {
   if (!Array.isArray(target)) return undefined;
-  return target.reduce((total, item) => {
-    const value = toNumber(item);
-    return value === null ? total : total + value;
-  }, 0);
+  // as in Obsidian, text and booleans are skipped (["1", 2, "x"].sum() is 2, [true, 1, 2].sum()
+  // is 3), and a list without numbers has no sum
+  const numbers = collectNumericArgs(target);
+  if (numbers.length === 0) return undefined;
+  return numbers.reduce((total, value) => total + value, 0);
 });
 
 registerMethodFunction("list", "mean", (target) => {
@@ -623,9 +663,9 @@ registerMethodFunction("list", "mean", (target) => {
   const numbers = collectNumericArgs(target);
   if (numbers.length === 0) return undefined;
   const sum = numbers.reduce((total, value) => total + value, 0);
-  // as in Obsidian, an empty value counts (as 0): [80, null].mean() is 40
-  const empty = target.filter((item) => item === null || item === undefined).length;
-  return sum / (numbers.length + empty);
+  // as in Obsidian, an empty value, text or a boolean counts as 0: [80, null].mean() is 40,
+  // ["2", 4].mean() is 2, [true, 4].mean() is 2
+  return sum / target.length;
 });
 
 registerMethodFunction("list", "count", (target) => (Array.isArray(target) ? target.length : 0));
@@ -697,8 +737,12 @@ registerMethodFunction("string", "linksTo", (target, [file], context) => {
 });
 
 registerMethodFunction("string", "title", (target) => {
-  const value = toStringValue(target);
-  return value.replace(/\b\w/g, (ch) => ch.toUpperCase());
+  // as in Obsidian: each space-separated word capitalised, the rest lowercase
+  // ("hello WORLD foo-bar" is "Hello World Foo-bar")
+  return toStringValue(target)
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 });
 
 registerMethodFunction("string", "asFile", (target, _args, context) => {
@@ -753,17 +797,27 @@ registerMethodFunction("list", "slice", (target, [start, end]) => {
   return target.slice(startIndex, endIndex);
 });
 
-registerMethodFunction("list", "sort", (target) => {
+registerMethodFunction("list", "sort", (target, _args, context) => {
   if (!Array.isArray(target)) return undefined;
+  // as in Obsidian: [10, 9, "b", "A", 2].sort() is 2, 9, 10, A, b
   return [...target].sort((a, b) => {
-    if (typeof a === "number" && typeof b === "number") return a - b;
-    return String(a).localeCompare(String(b));
+    const emptyA = isEmptySortValue(a);
+    const emptyB = isEmptySortValue(b);
+    if (emptyA || emptyB) return emptyA === emptyB ? 0 : emptyA ? 1 : -1;
+    return compareForSort(a, b, context.locale);
   });
 });
 
 registerMethodFunction("list", "unique", (target) => {
   if (!Array.isArray(target)) return undefined;
-  return [...new Set(target)];
+  // as in Obsidian: equal dates are one; 1 and "1" are not ([1, "1", 1].unique() is 1, "1")
+  const seen = new Set<unknown>();
+  return target.filter((item) => {
+    const key = item instanceof Date ? `date:${item.getTime()}` : item;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 });
 
 registerMethodFunction("number", "isEmpty", (target) => {
@@ -801,7 +855,7 @@ function registerAnyMethod(name: string, fn: MethodFunction): void {
   }
 }
 
-registerAnyMethod("isTruthy", (target) => Boolean(target));
+registerAnyMethod("isTruthy", (target) => isTruthy(target));
 
 registerAnyMethod("isType", (target, [typeName]) => {
   const expected = toStringValue(typeName).toLowerCase();

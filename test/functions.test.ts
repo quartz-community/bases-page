@@ -783,7 +783,8 @@ describe("link-valued needles (this.file.asLink())", () => {
   it("a missing needle matches nothing", () => {
     expect(evaluate('"[[Alice]]".contains(missing)', ctx({}))).toBe(false);
     expect(evaluate('contains("[[Alice]]", missing)', ctx({}))).toBe(false);
-    expect(evaluate('"hello".contains("")', ctx({}))).toBe(true);
+    // as in Obsidian (probe): no string contains ""
+    expect(evaluate('"hello".contains("")', ctx({}))).toBe(false);
   });
 });
 

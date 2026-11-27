@@ -10,6 +10,8 @@ import {
   dateHasTime,
   dateToString,
   isDuration,
+  isTruthy,
+  looseEquals,
   parseDuration,
   parseIsoDate,
 } from "./values";
@@ -66,7 +68,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toBoolean(value: unknown): boolean {
-  return Boolean(value);
+  return isTruthy(value);
 }
 
 function toNumber(value: unknown): number | null {
@@ -82,6 +84,8 @@ function toNumber(value: unknown): number | null {
 function toStringValue(value: unknown): string {
   if (value === undefined || value === null) return "";
   if (value instanceof Date) return dateToString(value);
+  // "a" + [1, 2] is "a1, 2"
+  if (Array.isArray(value)) return value.map(toStringValue).join(", ");
   return String(value);
 }
 
@@ -150,14 +154,8 @@ function compareValues(left: unknown, right: unknown, operator: string): boolean
     const r = asDate(right);
     if (l && r) return compareNumbers(l.getTime(), r.getTime(), operator);
   }
-  if (operator === "==") {
-    if (isDateValue(left) && isDateValue(right)) return left.getTime() === right.getTime();
-    return left === right;
-  }
-  if (operator === "!=") {
-    if (isDateValue(left) && isDateValue(right)) return left.getTime() !== right.getTime();
-    return left !== right;
-  }
+  if (operator === "==") return looseEquals(left, right);
+  if (operator === "!=") return !looseEquals(left, right);
 
   if (isDateValue(left) && isDateValue(right)) {
     const leftMs = left.getTime();
@@ -168,8 +166,10 @@ function compareValues(left: unknown, right: unknown, operator: string): boolean
     if (operator === "<=") return leftMs <= rightMs;
   }
 
-  const leftNum = toNumber(left);
-  const rightNum = toNumber(right);
+  // two strings compare as text ("10" > "9" is false), a string and a number as numbers
+  const bothText = typeof left === "string" && typeof right === "string";
+  const leftNum = bothText ? null : toNumber(left);
+  const rightNum = bothText ? null : toNumber(right);
   if (leftNum !== null && rightNum !== null) {
     if (operator === ">") return leftNum > rightNum;
     if (operator === "<") return leftNum < rightNum;
@@ -245,6 +245,8 @@ function applyBinary(operator: string, left: unknown, right: unknown): unknown {
   }
 
   if (operator === "+") {
+    // [1] + [2] is [1, 2]
+    if (Array.isArray(left) && Array.isArray(right)) return [...left, ...right];
     if (typeof left === "string" || typeof right === "string") {
       return `${toStringValue(left)}${toStringValue(right)}`;
     }
@@ -272,14 +274,16 @@ function applyBinary(operator: string, left: unknown, right: unknown): unknown {
     const leftNum = toNumber(left);
     const rightNum = toNumber(right);
     if (leftNum === null || rightNum === null) return undefined;
-    return rightNum === 0 ? 0 : leftNum / rightNum;
+    // as in Obsidian (JavaScript): 1 / 0 is Infinity
+    return leftNum / rightNum;
   }
 
   if (operator === "%") {
     const leftNum = toNumber(left);
     const rightNum = toNumber(right);
     if (leftNum === null || rightNum === null) return undefined;
-    return rightNum === 0 ? 0 : leftNum % rightNum;
+    // 5 % 0 is NaN
+    return leftNum % rightNum;
   }
 
   return compareValues(left, right, operator);
@@ -354,6 +358,8 @@ function resolveMember(target: unknown, name: string): unknown {
         return target.getMinutes();
       case "second":
         return target.getSeconds();
+      case "millisecond":
+        return target.getMilliseconds();
       default:
         return undefined;
     }
@@ -443,17 +449,17 @@ function executeLazyMethod(
 
   switch (name) {
     case "filter":
-      return target.filter((element, index) => Boolean(each(element, index)));
+      return target.filter((element, index) => toBoolean(each(element, index)));
     case "map":
       return target.map(each);
     case "flatMap":
       return target.map(each).flat();
     case "find":
-      return target.find((element, index) => Boolean(each(element, index)));
+      return target.find((element, index) => toBoolean(each(element, index)));
     case "some":
-      return target.some((element, index) => Boolean(each(element, index)));
+      return target.some((element, index) => toBoolean(each(element, index)));
     case "every":
-      return target.every((element, index) => Boolean(each(element, index)));
+      return target.every((element, index) => toBoolean(each(element, index)));
     case "reduce": {
       // reduce(expression, initial): `acc` starts as `initial` and becomes each result
       const initial = argPrograms[1] ? interpret(argPrograms[1], context) : null;

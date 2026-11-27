@@ -21,7 +21,8 @@ function compareValues(a, b) {
   const numA = Number(a);
   const numB = Number(b);
   if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB;
-  return String(a).localeCompare(String(b));
+  // text naturally ("Chapter 2" before "Chapter 10"), case ignored, as the build sorts it
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
 
 function sortDataRows(rows, columnIndex, direction) {
