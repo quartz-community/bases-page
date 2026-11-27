@@ -37,7 +37,8 @@ export function evaluateFilter(node: FilterNode | undefined, context: EvalContex
     return node.or.some((child) => evaluateFilter(child, context));
   }
   if ("not" in node) {
-    return !node.not.every((child) => evaluateFilter(child, context));
+    // "none of the following are true", as in Obsidian
+    return !node.not.some((child) => evaluateFilter(child, context));
   }
   return true;
 }

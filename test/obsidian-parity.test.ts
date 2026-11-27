@@ -98,10 +98,9 @@ describe("filters (Obsidian parity)", () => {
     expect(evaluateFilter({ not: ["a == 1", "b == 1"] }, ctx({ a: 0, b: 0 }))).toBe(true);
   });
 
-  // bug: src/compiler/index.ts evaluates `not` as "not all of them" (!every); Obsidian's
-  // "none of the following are true" excludes an entry that matches any one condition
-  // (probe: `not: [flag == 1, big == true]` keeps only the note with flag 0 and big 0).
-  it.fails("not: excludes an entry matching any one condition", () => {
+  // Obsidian's "none of the following are true" excludes an entry that matches any one
+  // condition (probe: `not: [flag == 1, big == true]` keeps only the note with flag 0, big 0).
+  it("not: excludes an entry matching any one condition", () => {
     expect(evaluateFilter({ not: ["a == 1", "b == 1"] }, ctx({ a: 1, b: 0 }))).toBe(false);
   });
 
