@@ -17,6 +17,8 @@ import {
   HtmlValue,
   IconValue,
   ImageValue,
+  compareForSort,
+  isEmptySortValue,
 } from "./values";
 import { tagMatches } from "../tags";
 
@@ -753,11 +755,14 @@ registerMethodFunction("list", "slice", (target, [start, end]) => {
   return target.slice(startIndex, endIndex);
 });
 
-registerMethodFunction("list", "sort", (target) => {
+registerMethodFunction("list", "sort", (target, _args, context) => {
   if (!Array.isArray(target)) return undefined;
+  // as in Obsidian: [10, 9, "b", "A", 2].sort() is 2, 9, 10, A, b
   return [...target].sort((a, b) => {
-    if (typeof a === "number" && typeof b === "number") return a - b;
-    return String(a).localeCompare(String(b));
+    const emptyA = isEmptySortValue(a);
+    const emptyB = isEmptySortValue(b);
+    if (emptyA || emptyB) return emptyA === emptyB ? 0 : emptyA ? 1 : -1;
+    return compareForSort(a, b, context.locale);
   });
 });
 

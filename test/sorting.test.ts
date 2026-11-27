@@ -193,3 +193,36 @@ describe("tags", () => {
     expect(tagMatches("#x", "  ")).toBe(false);
   });
 });
+
+describe("sort order", () => {
+  const sortBy = (values: unknown[], direction: "ASC" | "DESC" = "ASC") =>
+    resolveBasesEntries(
+      {},
+      values.map((v, i) => note(`n${i}.md`, v === undefined ? {} : { v })),
+      { type: "table", name: "v", sort: [{ property: "v", direction }] } as BasesView,
+    ).entries.map((e) => e.properties.v);
+
+  it("text that looks like a date in V8 is text: natural order, and transitive", () => {
+    const values = ["Chapter 100", "Chapter 13", "Chapter 9", "May 5", "Item 2", "item 10"];
+    expect(sortBy(values)).toEqual([
+      "Chapter 9",
+      "Chapter 13",
+      "Chapter 100",
+      "Item 2",
+      "item 10",
+      "May 5",
+    ]);
+    // the same order whatever the input order
+    expect(sortBy([...values].reverse())).toEqual(sortBy(values));
+  });
+
+  it("ISO dates in frontmatter sort as dates", () => {
+    const sorted = sortBy(["2024-03-10", "2024-03-05T23:00:00", "2024-03-05"]);
+    expect(sorted).toEqual(["2024-03-05", "2024-03-05T23:00:00", "2024-03-10"]);
+  });
+
+  it("values of different types do not interleave; empty values stay last", () => {
+    expect(sortBy(["b", 10, undefined, "a", 2])).toEqual([2, 10, "a", "b", undefined]);
+    expect(sortBy(["b", 10, undefined, "a", 2], "DESC")).toEqual(["b", "a", 10, 2, undefined]);
+  });
+});

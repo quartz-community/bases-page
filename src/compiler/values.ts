@@ -628,3 +628,71 @@ export class IconValue {
     return this.name;
   }
 }
+
+// ---------------------------------------------------------------------------- sorting
+
+const collators = new Map<string, Intl.Collator>();
+function collator(locale: string): Intl.Collator {
+  let found = collators.get(locale);
+  if (!found) {
+    try {
+      found = new Intl.Collator(locale, { numeric: true, sensitivity: "base" });
+    } catch {
+      found = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+    }
+    collators.set(locale, found);
+  }
+  return found;
+}
+
+/** Sort rank of a value's type: values of different types never interleave (transitive). */
+function sortRank(value: unknown): number {
+  if (typeof value === "number") return 0;
+  if (value instanceof Date) return 1;
+  if (isDuration(value)) return 2;
+  if (typeof value === "boolean") return 3;
+  return 4;
+}
+
+function sortText(value: unknown): string {
+  if (Array.isArray(value)) return value.map(sortText).join(", ");
+  if (value && typeof value === "object" && !(value instanceof TagValue)) {
+    const rec = value as { name?: unknown; toString(): string };
+    // a file value sorts by its name
+    if (typeof rec.name === "string" && "path" in (value as object)) return rec.name;
+  }
+  return String(value);
+}
+
+/** Whether a value counts as having no value when sorting (it then goes last). */
+export function isEmptySortValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === "number" && Number.isNaN(value)) ||
+    (value instanceof Date && Number.isNaN(value.getTime()))
+  );
+}
+
+/**
+ * Compares two (non-empty) values as Obsidian sorts them: numbers, dates and durations by
+ * value, booleans false first, text naturally ("Chapter 2" before "Chapter 10", case
+ * ignored). Values of different types sort by type, so the order is transitive.
+ */
+export function compareForSort(a: unknown, b: unknown, locale = "en"): number {
+  const rankA = sortRank(a);
+  const rankB = sortRank(b);
+  if (rankA !== rankB) return rankA - rankB;
+  switch (rankA) {
+    case 0:
+      return (a as number) - (b as number);
+    case 1:
+      return (a as Date).getTime() - (b as Date).getTime();
+    case 2:
+      return (a as Duration).totalMilliseconds() - (b as Duration).totalMilliseconds();
+    case 3:
+      return Number(a) - Number(b);
+    default:
+      return collator(locale).compare(sortText(a), sortText(b));
+  }
+}

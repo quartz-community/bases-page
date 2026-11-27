@@ -43,11 +43,9 @@ describe("sorting (Obsidian parity)", () => {
     ]);
   });
 
-  // bug: compareSort (src/resolver.ts) runs Date.parse on every string, so V8 reads
-  // "Chapter 100" as the year 100 and "Chapter 9" as September 2001, while "Chapter 13" is no
-  // date and compares as text: the default file-name order is wrong and the comparator is not
-  // even transitive. Obsidian orders text naturally (numbers by value).
-  it.fails("orders file names naturally by default (Chapter 2, 9, 10, 13, 100)", () => {
+  // Obsidian orders text naturally (numbers by value). compareSort used to run Date.parse on
+  // every string ("Chapter 100" was the year 100, "Chapter 9" September 2001).
+  it("orders file names naturally by default (Chapter 2, 9, 10, 13, 100)", () => {
     expect(names({})).toEqual([
       "Chapter 2",
       "Chapter 9",
@@ -57,7 +55,7 @@ describe("sorting (Obsidian parity)", () => {
     ]);
   });
 
-  it.fails("orders a text property naturally", () => {
+  it("orders a text property naturally", () => {
     const view = { type: "table", name: "v", sort: [{ property: "label", direction: "ASC" }] };
     expect(names({}, view as BasesView)).toEqual([
       "Chapter 2",
@@ -68,14 +66,23 @@ describe("sorting (Obsidian parity)", () => {
     ]);
   });
 
-  // bug: DESC negates the whole comparison, so empty values move to the top
-  it.fails("keeps entries without the sort value last when sorting descending", () => {
+  // DESC reverses the values, not where the empty ones go
+  it("keeps entries without the sort value last when sorting descending", () => {
     const view = { type: "table", name: "v", sort: [{ property: "rank", direction: "DESC" }] };
     expect(names({}, view as BasesView).slice(0, 3)).toEqual([
       "Chapter 100",
       "Chapter 10",
       "Chapter 2",
     ]);
+  });
+});
+
+describe("list.sort() (Obsidian parity)", () => {
+  const ctx: EvalContext = { note: {}, file: {} as never, formula: {} };
+  it("numbers first, then text naturally and ignoring case; false before true", () => {
+    expect(evaluate('[10, 9, "b", "A", 2].sort()', ctx)).toEqual([2, 9, 10, "A", "b"]);
+    expect(evaluate("[true, false].sort()", ctx)).toEqual([false, true]);
+    expect(evaluate('[date("2025-01-01"), date("2024-01-01")].sort()[0].year', ctx)).toBe(2024);
   });
 });
 
