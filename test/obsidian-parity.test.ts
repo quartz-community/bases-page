@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { render } from "preact-render-to-string";
 import { h } from "preact";
 import { CardsView } from "../src/components/views/cards";
+import { TableView } from "../src/components/views/table";
+import { BoardView } from "../src/components/views/board";
 import { evaluate, evaluateFilter } from "../src/compiler";
 import type { EvalContext } from "../src/compiler";
 import { buildSelfContext, resolveBasesEntries } from "../src/resolver";
@@ -307,20 +309,83 @@ describe("group headings (Obsidian parity)", () => {
     expect(headings("file.name")).toEqual(["A", "B"]);
   });
 
-  // bug: groupViewEntries (src/components/shared/group.ts) labels a group with formatValue(),
-  // the sortable form: a date shows as a UTC ISO timestamp (here the day before, in
-  // Europe/Amsterdam), a duration as milliseconds, a link as its wikilink source. Obsidian shows
-  // the value as its cells do.
-  it.fails("a date group is headed by the date as Obsidian shows it", () => {
+  // Obsidian shows a group's value as its cells do (formatValue, the group key, gave a UTC ISO
+  // timestamp for a date, milliseconds for a duration, the wikilink source for a link)
+  it("a date group is headed by the date as Obsidian shows it", () => {
     expect(headings("formula.d")).toEqual(["03/05/2024"]);
     expect(headings("formula.dt")).toEqual(["03/05/2024 2:30 PM"]);
   });
 
-  it.fails("a duration group is headed by the humanized duration", () => {
+  it("a duration group is headed by the humanized duration", () => {
     expect(headings("formula.dur")).toEqual(["4 days"]);
   });
 
-  it.fails("a link group is headed by the linked note's name", () => {
+  it("a link group is headed by the linked note's name", () => {
     expect(headings("owner")).toEqual(["A", "B"]);
+  });
+
+  const otherViews = (Component: unknown, type: string, property: string, cls: RegExp) => {
+    const both = [...files, note("G/C.md", {})];
+    const view = { type, name: "v", order: ["file.name"], groupBy: { property } } as never;
+    const { entries, total } = resolveBasesEntries({ formulas }, both, view);
+    const html = render(
+      h(Component as never, {
+        entries,
+        view,
+        basesData: { formulas },
+        total,
+        locale: "en-US",
+        slug: "index",
+        allSlugs: ["G/A", "G/B"],
+        linkResolution: "shortest",
+      }),
+    );
+    return [...html.matchAll(cls)].map((m) => m[1]!.replace(/<[^>]+>/g, ""));
+  };
+
+  it("table and board headings show the value too; entries without one are None", () => {
+    expect(
+      otherViews(
+        TableView,
+        "table",
+        "formula.dur",
+        /class="bases-table-group-label">(.*?)<\/span>/g,
+      ),
+    ).toEqual(["4 days"]);
+    expect(
+      otherViews(
+        TableView,
+        "table",
+        "owner",
+        /class="bases-table-group-label">(.*?)<\/span><span/g,
+      ),
+    ).toEqual(["A", "B", "None"]);
+    expect(
+      otherViews(
+        BoardView,
+        "board",
+        "owner",
+        /class="bases-board-column-header"><span>(.*?)<\/span>/g,
+      ),
+    ).toEqual(["None", "A", "B"]);
+  });
+
+  it("a boolean group is headed by a checkbox, as in Obsidian", () => {
+    const flags = [note("G/A.md", { done: true }), note("G/B.md", { done: false })];
+    const view = { type: "cards", name: "v", groupBy: { property: "done" } } as never;
+    const { entries, total } = resolveBasesEntries({}, flags, view);
+    const html = render(
+      h(CardsView as never, {
+        entries,
+        view,
+        basesData: {},
+        total,
+        locale: "en-US",
+        slug: "index",
+        allSlugs: [],
+        linkResolution: "shortest",
+      }),
+    );
+    expect(html.match(/class="bases-group-value"><input type="checkbox"/g)).toHaveLength(2);
   });
 });

@@ -6,6 +6,7 @@ import {
   getColumns,
   isEmptyValue,
   renderCellValue,
+  renderGroupLabel,
   resolveEntryPropertyValue,
 } from "../shared/cell";
 import { transformLink } from "@quartz-community/utils";
@@ -79,7 +80,13 @@ const BoardView: ViewRenderer = ({
         {groups.map((group) => (
           <div class="bases-board-column" style={columnStyle}>
             <div class="bases-board-column-header">
-              <span>{group.label}</span>
+              <span>
+                {renderGroupLabel(
+                  group,
+                  { slug, allSlugs, linkResolution, locale, tagPages },
+                  groupProperty,
+                )}
+              </span>
               <span class="bases-board-count">{group.entries.length}</span>
             </div>
             <div class="bases-board-column-body">

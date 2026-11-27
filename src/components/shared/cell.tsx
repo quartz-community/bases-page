@@ -228,6 +228,19 @@ export function renderCellValue(
   return String(value);
 }
 
+/**
+ * A group's heading: its value as Obsidian shows it, as a cell would (a date in the site's
+ * date format, a duration humanized, a link by its note's name), or the "None" label.
+ */
+export function renderGroupLabel(
+  group: { label: string; isEmpty: boolean; value?: unknown },
+  ctx: RenderCtx,
+  property?: string,
+): ComponentChild {
+  if (group.isEmpty || group.value === undefined) return group.label;
+  return renderCellValue(group.value, ctx, property);
+}
+
 export function isEmptyValue(value: unknown): boolean {
   if (value === undefined || value === null || value === "") return true;
   if (Array.isArray(value)) return value.length === 0;

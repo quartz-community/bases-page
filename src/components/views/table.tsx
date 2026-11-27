@@ -7,6 +7,7 @@ import {
   getColumns,
   isNoteProperty,
   renderCellValue,
+  renderGroupLabel,
   resolveEntryPropertyValue,
 } from "../shared/cell";
 import { computeSummary, renderSummary } from "../shared/summary";
@@ -143,24 +144,26 @@ const TableView: ViewRenderer = ({
         </thead>
         <tbody>
           {groups
-            ? groups.map(({ label, entries: groupEntries }) => (
+            ? groups.map((group) => (
                 <>
                   <tr class="bases-table-group-header">
                     <td colSpan={columns.length}>
                       {groupPropertyLabel && (
                         <span class="bases-table-group-property">{groupPropertyLabel} </span>
                       )}
-                      <span class="bases-table-group-label">{label}</span>
-                      <span class="bases-table-group-count">{groupEntries.length}</span>
+                      <span class="bases-table-group-label">
+                        {renderGroupLabel(group, ctx, groupProperty)}
+                      </span>
+                      <span class="bases-table-group-count">{group.entries.length}</span>
                     </td>
                   </tr>
                   {hasSummary && (
                     // as in Obsidian: each group's summaries, under its heading
                     <tr class="bases-summary-row bases-group-summary-row">
-                      {summaryCells(groupEntries)}
+                      {summaryCells(group.entries)}
                     </tr>
                   )}
-                  {groupEntries.map((entry) =>
+                  {group.entries.map((entry) =>
                     renderRow(
                       entry,
                       columns,

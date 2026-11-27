@@ -8,6 +8,7 @@ import {
   getColumns,
   isEmptyValue,
   renderCellValue,
+  renderGroupLabel,
   resolveEntryPropertyValue,
 } from "../shared/cell";
 import { transformLink } from "@quartz-community/utils";
@@ -121,7 +122,13 @@ const ListView: ViewRenderer = ({
                   {getColumnLabel(groupProperty, basesData, propertyLabels)}
                 </span>
               )}
-              <span class="bases-group-value">{group.label}</span>
+              <span class="bases-group-value">
+                {renderGroupLabel(
+                  group,
+                  { slug, allSlugs, linkResolution, locale, tagPages },
+                  groupProperty,
+                )}
+              </span>
             </div>
             <div class="bases-list-group-list">
               {group.entries.map((entry, index) => renderItem(entry, index + 1))}
