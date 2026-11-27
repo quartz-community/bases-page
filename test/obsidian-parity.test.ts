@@ -112,12 +112,12 @@ describe("filters (Obsidian parity)", () => {
     expect(evaluate("n == true", ctx({ n: 1 }))).toBe(true);
   });
 
-  // bug: toBoolean is JavaScript truthiness; Obsidian treats an empty list as false
-  it.fails("an empty list is falsy: if([], …)", () => {
+  // Obsidian treats an empty list as false
+  it("an empty list is falsy: if([], …)", () => {
     expect(evaluate('if([], "t", "f")', ctx({}))).toBe("f");
   });
 
-  it.fails("an empty list is falsy: isTruthy() and !", () => {
+  it("an empty list is falsy: isTruthy() and !", () => {
     expect(evaluate("[].isTruthy()", ctx({}))).toBe(false);
     expect(evaluate("![]", ctx({}))).toBe(true);
   });
@@ -205,20 +205,31 @@ describe("formulas (Obsidian parity)", () => {
     resolveBasesEntries({ formulas: { f: expression } }, [alpha], undefined, buildSelfContext(host))
       .entries[0]?.formulaValues.f;
 
-  // bug: hasProperty (src/compiler/functions.ts) ignores its target and reads the row's note
-  it.fails("this.file.hasProperty() looks at the embedding note's properties", () => {
+  // hasProperty reads its file's properties, not the row's
+  it("this.file.hasProperty() looks at the embedding note's properties", () => {
     expect(formula('this.file.hasProperty("hostprop")')).toBe(true);
     expect(formula('this.file.hasProperty("status")')).toBe(false);
   });
 
-  // bug: file() builds a bare file value from the path without looking the file up, so it has
-  // no tags, links or properties
-  it.fails("file(path) is the vault's file, with its tags", () => {
+  // file() looks the file up: it has its tags, links and properties
+  it("file(path) is the vault's file, with its tags", () => {
     expect(formula('file("Notes/Alpha.md").hasTag("proj")')).toBe(true);
   });
 
   it("file(path).name is the note's name", () => {
     expect(formula('file("Notes/Alpha.md").name')).toBe("Alpha");
+  });
+
+  it("file(path) of a file not in the vault has a name and no properties", () => {
+    expect(formula('file("Nope/Gone.md").name')).toBe("Gone");
+    expect(formula('file("Nope/Gone.md").hasProperty("status")')).toBe(false);
+    expect(formula('file("Notes/Alpha.md").hasProperty("status")')).toBe(true);
+    expect(formula('file.hasProperty("status")')).toBe(true);
+  });
+
+  it("a non-empty list is truthy, and filters see list truthiness", () => {
+    expect(formula("if([1], 1, 2)")).toBe(1);
+    expect(formula("[[], [1]].filter(value).length")).toBe(1);
   });
 });
 

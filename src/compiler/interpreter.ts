@@ -10,6 +10,7 @@ import {
   dateHasTime,
   dateToString,
   isDuration,
+  isTruthy,
   looseEquals,
   parseDuration,
   parseIsoDate,
@@ -67,7 +68,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toBoolean(value: unknown): boolean {
-  return Boolean(value);
+  return isTruthy(value);
 }
 
 function toNumber(value: unknown): number | null {
@@ -440,17 +441,17 @@ function executeLazyMethod(
 
   switch (name) {
     case "filter":
-      return target.filter((element, index) => Boolean(each(element, index)));
+      return target.filter((element, index) => toBoolean(each(element, index)));
     case "map":
       return target.map(each);
     case "flatMap":
       return target.map(each).flat();
     case "find":
-      return target.find((element, index) => Boolean(each(element, index)));
+      return target.find((element, index) => toBoolean(each(element, index)));
     case "some":
-      return target.some((element, index) => Boolean(each(element, index)));
+      return target.some((element, index) => toBoolean(each(element, index)));
     case "every":
-      return target.every((element, index) => Boolean(each(element, index)));
+      return target.every((element, index) => toBoolean(each(element, index)));
     case "reduce": {
       // reduce(expression, initial): `acc` starts as `initial` and becomes each result
       const initial = argPrograms[1] ? interpret(argPrograms[1], context) : null;

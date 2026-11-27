@@ -736,3 +736,9 @@ export function looseEquals(left: unknown, right: unknown): boolean {
   }
   return false;
 }
+
+/** Truthiness as in Obsidian's formulas: JavaScript's, except that an empty list is false. */
+export function isTruthy(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  return Boolean(value);
+}

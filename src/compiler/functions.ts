@@ -19,6 +19,7 @@ import {
   ImageValue,
   compareForSort,
   isEmptySortValue,
+  isTruthy,
   looseEquals,
 } from "./values";
 import { tagMatches } from "../tags";
@@ -317,7 +318,7 @@ function getMethodTarget(value: unknown): MethodTarget | undefined {
 }
 
 registerGlobalFunction("if", ([cond, whenTrue, whenFalse]) => {
-  return cond ? whenTrue : whenFalse;
+  return isTruthy(cond) ? whenTrue : whenFalse;
 });
 
 registerGlobalFunction("contains", ([haystack, needle], context) => {
@@ -404,10 +405,12 @@ registerGlobalFunction("escapeHTML", ([value]) => {
     .replace(/'/g, "&#39;");
 });
 
-registerGlobalFunction("file", ([path]) => {
+// the vault's file at that path (with its tags, links and properties), as in Obsidian
+registerGlobalFunction("file", ([path], context) => {
   if (typeof path !== "string") return undefined;
   if (!path.trim()) return undefined;
-  return buildFileValue(path);
+  const found = lookupFile(path, context);
+  return found ? { ...found } : buildFileValue(path);
 });
 
 // As in Obsidian: true if the file has any of the tags or one of their nested tags,
@@ -458,13 +461,16 @@ registerMethodFunction("file", "inFolder", (target, [folder]) => {
   return target.folder === normalized || target.folder.startsWith(`${normalized}/`);
 });
 
-registerMethodFunction("file", "hasProperty", (_target, [prop], context) => {
+registerMethodFunction("file", "hasProperty", (file, [prop], context) => {
   const value = toStringValue(prop);
   if (!value) return false;
   // Obsidian treats hasProperty as "does the key exist in frontmatter?" regardless
-  // of whether the value is null/undefined/falsy.
+  // of whether the value is null/undefined/falsy. The file's own properties: this.file's are
+  // the embedding note's.
   const parts = value.split(".");
-  let target: unknown = context.note;
+  // (a file not in the vault has none)
+  const own = isRecord(file) ? file.properties : undefined;
+  let target: unknown = isRecord(own) ? own : file === context.file ? context.note : {};
   for (const part of parts) {
     if (!isRecord(target)) return false;
     if (!Object.hasOwn(target, part)) return false;
@@ -808,7 +814,7 @@ function registerAnyMethod(name: string, fn: MethodFunction): void {
   }
 }
 
-registerAnyMethod("isTruthy", (target) => Boolean(target));
+registerAnyMethod("isTruthy", (target) => isTruthy(target));
 
 registerAnyMethod("isType", (target, [typeName]) => {
   const expected = toStringValue(typeName).toLowerCase();
