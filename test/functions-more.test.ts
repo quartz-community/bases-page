@@ -220,8 +220,9 @@ describe("value methods", () => {
     expect(ev('"abcdef".slice("x")')).toBe("abcdef");
     expect(ev('"abcdef".slice(1, "x")')).toBe("bcdef");
     expect(ev('"ab".repeat("x")')).toBe("");
-    // text is skipped, also numeric text (Obsidian: ["1", 2, "x"].sum() is 2)
-    expect(ev('[true, 1, "2"].sum()')).toBe(2);
+    // text and booleans are skipped, also numeric text (Obsidian: ["1", 2, "x"].sum() is 2,
+    // [true, 1, 2].sum() is 3)
+    expect(ev('[true, 1, "2"].sum()')).toBe(1);
   });
 
   it("dates: isEmpty, format() with the default pattern, date() and time()", () => {

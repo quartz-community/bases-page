@@ -86,6 +86,66 @@ describe("list.sort() (Obsidian parity)", () => {
     expect(evaluate("[true, false].sort()", ctx)).toEqual([false, true]);
     expect(evaluate('[date("2025-01-01"), date("2024-01-01")].sort()[0].year', ctx)).toBe(2024);
   });
+
+  // Obsidian compares two numbers, dates or durations by value, anything else as text
+  // (dates as 2024-01-01, durations as "4 days", booleans as "true"/"false")
+  const sorted = (expr: string) => (evaluate(expr, ctx) as unknown[]).map(String);
+  it("mixed types: numbers, dates and durations by value, the rest as text", () => {
+    expect(sorted('[true, 5, "b", date("2024-01-01"), 2, "A", false].sort()')).toEqual([
+      "2",
+      "5",
+      "2024-01-01",
+      "A",
+      "b",
+      "false",
+      "true",
+    ]);
+    expect(
+      sorted('[date("2024-01-05") - date("2024-01-01"), 3, "x", date("2024-01-01")].sort()'),
+    ).toEqual(["3", "4 days", "2024-01-01", "x"]);
+    expect(sorted('["1e3", 5].sort()')).toEqual(["1e3", "5"]);
+    expect(sorted('[date("2024-01-01"), "02/01/2023"].sort()')).toEqual([
+      "02/01/2023",
+      "2024-01-01",
+    ]);
+    expect(sorted('[date("2024-01-01 10:00"), "2024-01-01T09"].sort()')).toEqual([
+      "2024-01-01T09",
+      "2024-01-01T10:00:00",
+    ]);
+    expect(sorted("[5, true].sort()")).toEqual(["5", "true"]);
+    expect(sorted('["g", true, "f", false].sort()')).toEqual(["f", "false", "g", "true"]);
+    expect(sorted('[400000000, date("2024-01-05") - date("2024-01-01")].sort()')).toEqual([
+      "4 days",
+      "400000000",
+    ]);
+    expect(sorted('["5 x", date("2024-01-05") - date("2024-01-01"), "3 x"].sort()')).toEqual([
+      "3 x",
+      "4 days",
+      "5 x",
+    ]);
+    expect(sorted('[[2], 1, "a"].sort()')).toEqual(["1", "2", "a"]);
+    expect(evaluate("[3, null, 1].sort()", ctx)).toEqual([1, 3, null]);
+  });
+
+  it("items equal but for case or accents keep their order", () => {
+    expect(evaluate('["b", "B", "a", "A", "á", "Á"].sort()', ctx)).toEqual([
+      "a",
+      "A",
+      "á",
+      "Á",
+      "b",
+      "B",
+    ]);
+    expect(evaluate('["Á", "á", "A", "a", "B", "b"].sort()', ctx)).toEqual([
+      "Á",
+      "á",
+      "A",
+      "a",
+      "B",
+      "b",
+    ]);
+    expect(evaluate('["a10", "A9", "a9", "A10"].sort()', ctx)).toEqual(["A9", "a9", "a10", "A10"]);
+  });
 });
 
 describe("filters (Obsidian parity)", () => {
@@ -183,9 +243,10 @@ describe("formulas (Obsidian parity)", () => {
       chapters.slice(0, 1),
     );
     const values = entries[0]!.formulaValues;
-    expect(String(values.a)).toMatch(/^Error: Circular reference/);
-    expect(String(values.b)).toMatch(/^Error: Circular reference/);
-    expect(String(values.c)).toMatch(/^Error: Circular reference/);
+    // Obsidian's message, for every formula in the loop
+    expect(String(values.a)).toBe("Error: Infinite loop detected in formula");
+    expect(String(values.b)).toBe("Error: Infinite loop detected in formula");
+    expect(String(values.c)).toBe("Error: Infinite loop detected in formula");
     expect(values.d).toBe(6);
     // a plain object once the entry is resolved
     expect(Object.getOwnPropertyDescriptor(values, "d")?.get).toBeUndefined();
@@ -260,6 +321,29 @@ describe("values (Obsidian parity)", () => {
     expect(evaluate('["9", 4].max()', ctx)).toBe(4);
   });
 
+  // booleans are skipped like text; without numbers there is no result
+  it("sum(), mean(), min() and max() skip booleans", () => {
+    expect(evaluate("[true, 1, 2].sum()", ctx)).toBe(3);
+    expect(evaluate("[true, false, true].sum()", ctx)).toBeUndefined();
+    expect(evaluate('["a", "b"].sum()', ctx)).toBeUndefined();
+    expect(evaluate("[].sum()", ctx)).toBeUndefined();
+    expect(evaluate("[true, false].mean()", ctx)).toBeUndefined();
+    expect(evaluate("[true, 4].mean()", ctx)).toBe(2);
+    expect(evaluate("[true, 0].max()", ctx)).toBe(0);
+    expect(evaluate("[true, 5].min()", ctx)).toBe(5);
+  });
+
+  it("the global min() and max() reject booleans and dates", () => {
+    const err = (fn: string, type: string) =>
+      `Error: Type error in "${fn}", parameter "inputs". Expected Number, given ${type}.`;
+    expect(String(evaluate("max(true, 0)", ctx))).toBe(err("max", "Boolean"));
+    expect(String(evaluate("min(true, 5)", ctx))).toBe(err("min", "Boolean"));
+    expect(String(evaluate('max(date("2024-01-01"), date("2025-01-01"))', ctx))).toBe(
+      err("max", "Date"),
+    );
+    expect(evaluate("max(3, 7)", ctx)).toBe(7);
+  });
+
   it("list + list concatenates", () => {
     expect(evaluate("[1] + [2]", ctx)).toEqual([1, 2]);
   });
@@ -284,8 +368,21 @@ describe("values (Obsidian parity)", () => {
     expect(evaluate("number(true)", ctx)).toBe(1);
   });
 
-  it('number("") is an error', () => {
+  it('number("") and number("abc") are errors', () => {
     expect(String(evaluate('number("")', ctx))).toBe('Error: Unable to parse "" as a number.');
+    expect(String(evaluate('number("abc")', ctx))).toBe(
+      'Error: Unable to parse "abc" as a number.',
+    );
+  });
+
+  it("number() of a date is its epoch milliseconds, of a list an error", () => {
+    expect(evaluate('number(date("2024-01-01 10:30"))', ctx)).toBe(
+      new Date(2024, 0, 1, 10, 30).getTime(),
+    );
+    expect(String(evaluate("number([1])", ctx))).toBe(
+      'Error: Unable to convert "List" to a number.',
+    );
+    expect(evaluate("number(null)", ctx)).toBeUndefined();
   });
 
   it('unique() keeps 1 and "1" apart; text + list joins the list', () => {

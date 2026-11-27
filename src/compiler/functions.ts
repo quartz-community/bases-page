@@ -102,13 +102,15 @@ function flattenArgs(args: unknown[]): unknown[] {
   return args;
 }
 
-// The numbers among the values: as in Obsidian, text is skipped, also numeric text
-// (["9", 4].max() is 4)
+/**
+ * The numbers among the values for sum/mean/min/max: as in Obsidian, text is skipped, also
+ * numeric text (["9", 4].max() is 4), and so are booleans ([true, 0].max() is 0).
+ */
 function collectNumericArgs(args: unknown[]): number[] {
   const values = flattenArgs(args);
   const numbers: number[] = [];
   for (const value of values) {
-    if (typeof value === "string") continue;
+    if (typeof value === "string" || typeof value === "boolean") continue;
     const numberValue = toNumber(value);
     if (numberValue !== null) numbers.push(numberValue);
   }
@@ -350,23 +352,39 @@ registerGlobalFunction("today", () => {
 
 registerGlobalFunction("number", ([value]) => {
   if (isDuration(value)) throw new FormulaError('Unable to convert "Duration" to a number.');
+  if (Array.isArray(value)) throw new FormulaError('Unable to convert "List" to a number.');
+  // as in Obsidian: a date is its epoch milliseconds
+  if (value instanceof Date) return value.getTime();
   if (typeof value === "string") {
-    // as in Obsidian: the leading number ("12abc" is 12, "0x10" is 0); "" is an error
-    if (!value.trim()) throw new FormulaError(`Unable to parse "${value}" as a number.`);
+    // as in Obsidian: the leading number ("12abc" is 12, "0x10" is 0); "" and "abc" are errors
     const parsed = parseFloat(value);
-    return Number.isNaN(parsed) ? undefined : parsed;
+    if (Number.isNaN(parsed)) throw new FormulaError(`Unable to parse "${value}" as a number.`);
+    return parsed;
   }
   const numberValue = toNumber(value);
   return numberValue === null ? undefined : numberValue;
 });
 
+/** As in Obsidian, the global min()/max() take numbers only: a boolean or a date is a type error. */
+function checkNumberInputs(name: string, args: unknown[]): void {
+  for (const value of flattenArgs(args)) {
+    if (typeof value === "boolean" || value instanceof Date) {
+      throw new FormulaError(
+        `Type error in "${name}", parameter "inputs". Expected Number, given ${typeNameOf(value)}.`,
+      );
+    }
+  }
+}
+
 registerGlobalFunction("min", (args) => {
+  checkNumberInputs("min", args);
   const numbers = collectNumericArgs(args);
   if (numbers.length === 0) return undefined;
   return Math.min(...numbers);
 });
 
 registerGlobalFunction("max", (args) => {
+  checkNumberInputs("max", args);
   const numbers = collectNumericArgs(args);
   if (numbers.length === 0) return undefined;
   return Math.max(...numbers);
@@ -633,8 +651,11 @@ registerMethodFunction("date", "isEmpty", (target) => {
 
 registerMethodFunction("list", "sum", (target) => {
   if (!Array.isArray(target)) return undefined;
-  // as in Obsidian, text is skipped (["1", 2, "x"].sum() is 2)
-  return collectNumericArgs(target).reduce((total, value) => total + value, 0);
+  // as in Obsidian, text and booleans are skipped (["1", 2, "x"].sum() is 2, [true, 1, 2].sum()
+  // is 3), and a list without numbers has no sum
+  const numbers = collectNumericArgs(target);
+  if (numbers.length === 0) return undefined;
+  return numbers.reduce((total, value) => total + value, 0);
 });
 
 registerMethodFunction("list", "mean", (target) => {
@@ -642,8 +663,8 @@ registerMethodFunction("list", "mean", (target) => {
   const numbers = collectNumericArgs(target);
   if (numbers.length === 0) return undefined;
   const sum = numbers.reduce((total, value) => total + value, 0);
-  // as in Obsidian, an empty value or text counts as 0: [80, null].mean() is 40,
-  // ["2", 4].mean() is 2
+  // as in Obsidian, an empty value, text or a boolean counts as 0: [80, null].mean() is 40,
+  // ["2", 4].mean() is 2, [true, 4].mean() is 2
   return sum / target.length;
 });
 

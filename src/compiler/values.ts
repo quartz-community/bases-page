@@ -668,17 +668,18 @@ function collator(locale: string): Intl.Collator {
   return found;
 }
 
-/** Sort rank of a value's type: values of different types never interleave (transitive). */
-function sortRank(value: unknown): number {
-  if (typeof value === "number") return 0;
-  if (value instanceof Date) return 1;
-  if (isDuration(value)) return 2;
-  if (typeof value === "boolean") return 3;
-  return 4;
+/** A value's number when sorting: numbers, dates (epoch ms) and durations (ms) compare by value. */
+function sortNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (value instanceof Date) return value.getTime();
+  if (isDuration(value)) return value.totalMilliseconds();
+  return undefined;
 }
 
 function sortText(value: unknown): string {
   if (Array.isArray(value)) return value.map(sortText).join(", ");
+  // as Obsidian writes them: 2024-03-05, 2024-03-05T14:30:00
+  if (value instanceof Date) return dateToString(value);
   if (value && typeof value === "object" && !(value instanceof TagValue)) {
     const rec = value as { name?: unknown; toString(): string };
     // a file value sorts by its name
@@ -698,26 +699,17 @@ export function isEmptySortValue(value: unknown): boolean {
 }
 
 /**
- * Compares two (non-empty) values as Obsidian sorts them: numbers, dates and durations by
- * value, booleans false first, text naturally ("Chapter 2" before "Chapter 10", case
- * ignored). Values of different types sort by type, so the order is transitive.
+ * Compares two (non-empty) values as Obsidian sorts them: two numbers, dates or durations by
+ * value (a date as its epoch milliseconds, a duration as milliseconds); anything else as text,
+ * naturally ("Chapter 2" before "Chapter 10", case ignored), with dates written as
+ * `2024-03-05`, durations as `4 days` and booleans as `true`/`false`. So
+ * `[true, 5, "b", date("2024-01-01"), 2, "A", false].sort()` is 2, 5, 2024-01-01, A, b, false, true.
  */
 export function compareForSort(a: unknown, b: unknown, locale = "en"): number {
-  const rankA = sortRank(a);
-  const rankB = sortRank(b);
-  if (rankA !== rankB) return rankA - rankB;
-  switch (rankA) {
-    case 0:
-      return (a as number) - (b as number);
-    case 1:
-      return (a as Date).getTime() - (b as Date).getTime();
-    case 2:
-      return (a as Duration).totalMilliseconds() - (b as Duration).totalMilliseconds();
-    case 3:
-      return Number(a) - Number(b);
-    default:
-      return collator(locale).compare(sortText(a), sortText(b));
-  }
+  const numberA = sortNumber(a);
+  const numberB = sortNumber(b);
+  if (numberA !== undefined && numberB !== undefined) return numberA - numberB;
+  return collator(locale).compare(sortText(a), sortText(b));
 }
 
 // ---------------------------------------------------------------------------- equality

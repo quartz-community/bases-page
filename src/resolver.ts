@@ -210,7 +210,7 @@ function lazyFormulas(
       configurable: true,
       get() {
         if (evaluating.has(name)) {
-          return new ErrorValue(`Circular reference in formula "${name}"`);
+          return new ErrorValue("Infinite loop detected in formula");
         }
         evaluating.add(name);
         const value = evaluate(expr, context);
