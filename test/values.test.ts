@@ -85,16 +85,17 @@ describe("formatMoment", () => {
     expect(formatMoment(new Date(2024, 0, 5), "MMMM", "de")).toBe("Januar");
   });
 
-  // bug: DDDD rounds the time since 1 January, so any time after noon counts the next day
-  // (moment: 065 on 5 March 2024, 365 on 31 December 1999)
-  it.fails("DDDD is the day of the year, whatever the time", () => {
+  // moment: 065 on 5 March 2024, 365 on 31 December 1999 (the time of day doesn't count)
+  it("DDDD is the day of the year, whatever the time", () => {
     expect(formatMoment(d, "DDDD")).toBe("065");
     expect(formatMoment(new Date(1999, 11, 31, 23, 59), "DDDD")).toBe("365");
   });
 
-  // bug: dd is Intl's narrow weekday (T); moment's is the two-letter one (Tu)
-  it.fails("dd is the two-letter weekday", () => {
+  // moment's dd is the two-letter weekday (Tu), not Intl's narrow one (T)
+  it("dd is the two-letter weekday", () => {
     expect(formatMoment(d, "dd")).toBe("Tu");
+    expect(formatMoment(d, "dd", "de")).toBe("Di");
+    expect(formatMoment(d, "DDD")).toBe("65");
   });
 });
 
@@ -160,10 +161,9 @@ describe("relativeFromNow", () => {
     expect(relativeFromNow(at(-3 * D), "nl", now)).toBe("3 dagen geleden");
   });
 
-  // bug: relativeFromNow humanizes the difference in milliseconds; moment's fromNow() (Obsidian's
-  // date.relative()) counts the calendar months between the two dates, so near a boundary they
-  // disagree: 46 days ago is "a month ago" in Obsidian, 320 days "10 months ago"
-  it.fails("counts calendar months, as moment's fromNow() does", () => {
+  // moment's fromNow() (Obsidian's date.relative()) counts the calendar months between the two
+  // dates: 46 days ago is "a month ago", 320 days ahead "in 10 months"
+  it("counts calendar months, as moment's fromNow() does", () => {
     expect(relativeFromNow(at(-46 * D), "en", now)).toBe("a month ago");
     expect(relativeFromNow(at(320 * D), "en", now)).toBe("in 10 months");
   });

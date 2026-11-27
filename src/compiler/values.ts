@@ -352,7 +352,8 @@ function humanizeUnits(duration: Duration): {
   const months = Math.abs(duration.months);
   const days = Math.abs(duration.days);
   const ms = Math.abs(duration.ms);
-  const totalDays = days + months * DAYS_PER_MONTH + ms / MS.day;
+  // moment's as("d") rounds the months to whole days first
+  const totalDays = days + Math.round(months * DAYS_PER_MONTH) + ms / MS.day;
   const totalMonths = months + (days + ms / MS.day) / DAYS_PER_MONTH;
   return {
     s: Math.round(totalDays * 86_400),
@@ -431,10 +432,23 @@ export function humanizeDuration(duration: Duration, locale = "en"): string {
   }
 }
 
-/** moment's `fromNow()`: `3 years ago`, `in 2 days`. */
+/**
+ * moment's difference between two moments as a duration: the whole calendar months from the
+ * earlier to the later one, and the milliseconds left (negative when `to` is earlier).
+ */
+function momentsDifference(from: Date, to: Date): Duration {
+  const sign = to.getTime() >= from.getTime() ? 1 : -1;
+  const [base, other] = sign > 0 ? [from, to] : [to, from];
+  let months = other.getMonth() - base.getMonth() + (other.getFullYear() - base.getFullYear()) * 12;
+  if (addMonthsClamped(base, months).getTime() > other.getTime()) months -= 1;
+  const ms = other.getTime() - addMonthsClamped(base, months).getTime();
+  return new Duration({ months: sign * months, ms: sign * ms });
+}
+
+/** moment's `fromNow()`: `3 years ago`, `in 2 days` (calendar months, as moment counts them). */
 export function relativeFromNow(date: Date, locale = "en", now = new Date()): string {
   const diff = date.getTime() - now.getTime();
-  const [unit, count] = relativeUnit(Duration.fromMilliseconds(diff));
+  const [unit, count] = relativeUnit(momentsDifference(now, date));
   if (isEnglish(locale)) {
     const text = EN_RELATIVE[unit].replace("%d", String(count));
     return diff < 0 || (diff === 0 && unit === "s") ? `${text} ago` : `in ${text}`;
@@ -483,7 +497,7 @@ export function displayDate(date: Date, locale = "en-US"): string {
 }
 
 const FORMAT_TOKEN_RE =
-  /\[([^\]]*)\]|LLLL|LLL|LL|LTS|LT|L|YYYY|YY|MMMM|MMM|MM|Mo|M|Do|DDDD|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|A|a|ZZ|Z|X|x/g;
+  /\[([^\]]*)\]|LLLL|LLL|LL|LTS|LT|L|YYYY|YY|MMMM|MMM|MM|Mo|M|Do|DDDD|DDD|DD|D|dddd|ddd|dd|d|HH|H|hh|h|mm|m|ss|s|SSS|A|a|ZZ|Z|X|x/g;
 
 function ordinal(n: number, locale: string): string {
   if (!locale.toLowerCase().startsWith("en")) return `${n}.`;
@@ -497,6 +511,12 @@ function zoneOffset(date: Date, separator: string): string {
   const sign = offset >= 0 ? "+" : "-";
   const abs = Math.abs(offset);
   return `${sign}${pad(Math.floor(abs / 60))}${separator}${pad(abs % 60)}`;
+}
+
+/** The day of the year (1 January is 1), whatever the time of day and DST. */
+function dayOfYear(date: Date): number {
+  const day = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.round((day - Date.UTC(date.getFullYear(), 0, 1)) / 86_400_000) + 1;
 }
 
 /** moment's `format()` with the common tokens, month and day names in the site's locale. */
@@ -533,10 +553,10 @@ export function formatMoment(date: Date, format: string, locale = "en-US"): stri
         return String(date.getMonth() + 1);
       case "Do":
         return ordinal(date.getDate(), locale);
-      case "DDDD": {
-        const start = new Date(date.getFullYear(), 0, 1);
-        return pad(Math.round((date.getTime() - start.getTime()) / 86_400_000) + 1, 3);
-      }
+      case "DDDD":
+        return pad(dayOfYear(date), 3);
+      case "DDD":
+        return String(dayOfYear(date));
       case "DD":
         return pad(date.getDate());
       case "D":
@@ -546,7 +566,10 @@ export function formatMoment(date: Date, format: string, locale = "en-US"): stri
       case "ddd":
         return intl(date, locale, { weekday: "short" });
       case "dd":
-        return intl(date, locale, { weekday: "narrow" });
+        // moment's two-letter weekday (Tu, Di, ma): the short name's first two letters
+        return Array.from(intl(date, locale, { weekday: "short" }).replace(/\.$/, ""))
+          .slice(0, 2)
+          .join("");
       case "d":
         return String(date.getDay());
       case "HH":
