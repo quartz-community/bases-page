@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.6
+
+### Patch Changes
+
+- 2d3446a: Smaller formula differences from Obsidian fixed: `date.millisecond`; `1 / 0` is Infinity (shown as ∞) and `5 % 0` NaN instead of 0; `title()` lowercases the rest of each word; `[1] + [2]` concatenates and `"a" + [1, 2]` is `a1, 2`; `sum()`, `mean()`, `min()` and `max()` skip text, also numeric text; no string contains `""`; `unique()` removes equal dates; `number("12abc")` is 12, `number("0x10")` 0 and `number("")` an error.
+- b956bd4: A formula can use a formula written after it (it used to see an empty value), as in Obsidian. Formulas that use each other in a circle show an error instead.
+- ec526ae: Group headings show the group's value as its cells do, as in Obsidian: dates in the site's date format (they showed a UTC timestamp, sometimes of the day before), durations humanized (they showed milliseconds), links as the linked note's name (they showed the `[[…]]` source), booleans as a checkbox.
+- 94dc86f: `==` and `!=` compare as in Obsidian: a missing property equals `null` (so `status == null` finds notes without a status, and `status != null` no longer keeps them), a number equals the same number as text or a boolean (`"5" == 5`, `1 == true`), and lists are equal when their items are. `list.contains()` matches the same way (`[1, 2].contains("1")`). Two strings compare as text with `<` and `>` (`"10" > "9"` is false).
+- 493cc09: Dates format and read as moment (Obsidian) does: `DDDD` is the day of the year also after noon, `DDD` is supported, `dd` is the two-letter weekday (`Tu`), and `date.relative()` counts calendar months near month boundaries (46 days ago is "a month ago").
+- a8acf87: Sort text as Obsidian does: naturally ("Chapter 2" before "Chapter 10"), ignoring case, and never read arbitrary text as a date. This changes the default file-name order, sorted columns and group order wherever names or values contain numbers. Values of different types no longer interleave, and entries without a value stay last when sorting descending too (they used to come first). `list.sort()` follows the same order.
+- b972c26: A `not:` filter now excludes entries matching any of its conditions ("none of the following are true", as in Obsidian), not only entries matching all of them.
+- 1f20e84: Mixed values sort as in Obsidian: two numbers, dates or durations compare by value, anything else as text (so `[true, 5, "b", date("2024-01-01")].sort()` is 5, 2024-01-01, b, true), which also sets the order of groups. `sum()`, `mean()`, `min()` and `max()` skip booleans like text and are empty without numbers; the global `min()`/`max()` reject booleans and dates. `number("abc")` and `number([1])` are errors, `number(date)` gives epoch milliseconds, and a formula loop shows Obsidian's "Infinite loop detected in formula".
+- b1c5ac9: `this.file.hasProperty()` checks the embedding note's properties (it checked each entry's), `file(path)` is the vault's file with its tags, links and properties, and an empty list counts as false (in `if()`, `!`, `isTruthy()`, `&&`/`||` and filters), as in Obsidian.
+
 ## 1.5.5
 
 ### Patch Changes
