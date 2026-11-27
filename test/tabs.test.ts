@@ -43,6 +43,51 @@ function tabsOf(html: string) {
   };
 }
 
+type HNode = {
+  type: string;
+  tagName?: string;
+  properties?: Record<string, unknown>;
+  children?: HNode[];
+};
+
+/** Run the codeblock transform over placeholders for `blocks` (the note's `basesBlocks`). */
+function transformCodeblocks(
+  placeholders: Record<string, string>[],
+  fileData: Record<string, unknown>,
+  files = allFiles,
+): HNode {
+  const transform = BasesPage().treeTransforms!({} as never)[0]!;
+  const root = {
+    type: "root" as const,
+    children: placeholders.map((properties) => ({
+      type: "element" as const,
+      tagName: "div",
+      properties,
+      children: [],
+    })),
+  };
+  transform(
+    root as never,
+    fileData.slug as never,
+    {
+      fileData,
+      allFiles: files,
+      cfg: { locale: "en-US" },
+      ctx: { allSlugs: [] },
+    } as never,
+  );
+  return root as HNode;
+}
+
+function elements(node: HNode, test: (el: HNode) => boolean, out: HNode[] = []): HNode[] {
+  if (node.type === "element" && test(node)) out.push(node);
+  node.children?.forEach((child) => elements(child, test, out));
+  return out;
+}
+
+const hasClass = (name: string) => (el: HNode) =>
+  ((el.properties?.className as string[] | undefined) ?? []).includes(name);
+
 describe("bases view tabs (WAI-ARIA tabs)", () => {
   it("wire each tab to its view, with only the selected tab in the tab order", () => {
     const html = render(
@@ -60,6 +105,11 @@ describe("bases view tabs (WAI-ARIA tabs)", () => {
       ["false", "-1"],
     ]);
     expect(panels).toHaveLength(3);
+    expect(tabs.map((t) => [t.id, t.controls])).toEqual([
+      ["bases-tab-0", "bases-view-0"],
+      ["bases-tab-1", "bases-view-1"],
+      ["bases-tab-2", "bases-view-2"],
+    ]);
     tabs.forEach((tab, i) => {
       expect(tab.controls).toBe(panels[i]!.id);
       expect(panels[i]!.role).toBe("tabpanel");
@@ -94,6 +144,109 @@ describe("bases view tabs (WAI-ARIA tabs)", () => {
     walk(root);
     expect(fromTree).toHaveLength(12);
     expect(new Set(fromTree).size).toBe(12);
+    // and each tab still controls its own block's panel, which is labelled by that tab
+    const tabs = elements(root as HNode, (el) => el.properties?.role === "tab");
+    const panels = elements(root as HNode, hasClass("bases-view"));
+    expect(tabs.map((t) => [t.properties!.id, t.properties!.ariaControls])).toEqual(
+      [0, 1].flatMap((block) =>
+        [0, 1, 2].map((i) => [`bases-${block}-tab-${i}`, [`bases-${block}-view-${i}`]]),
+      ),
+    );
+    expect(panels.map((p) => [p.properties!.id, p.properties!.ariaLabelledBy])).toEqual(
+      [0, 1].flatMap((block) =>
+        [0, 1, 2].map((i) => [`bases-${block}-view-${i}`, [`bases-${block}-tab-${i}`]]),
+      ),
+    );
+  });
+
+  it("wire each codeblock tab to its panel, with only the ARIA attributes on the panel", () => {
+    const root = transformCodeblocks([{ dataQzBasesCodeblock: "0" }], {
+      slug: "note",
+      basesBlocks: [basesData],
+    });
+    const tabs = elements(root, (el) => el.properties?.role === "tab");
+    const panels = elements(root, hasClass("bases-view"));
+    expect(tabs.map((t) => [t.properties!.id, t.properties!.ariaControls])).toEqual([
+      ["bases-0-tab-0", ["bases-0-view-0"]],
+      ["bases-0-tab-1", ["bases-0-view-1"]],
+      ["bases-0-tab-2", ["bases-0-view-2"]],
+    ]);
+    // the panel's attributes, exactly: no stray attributes from a malformed tag
+    expect(panels.map((p) => p.properties)).toEqual(
+      ["table", "list", "cards"].map((type, i) => ({
+        className: i === 0 ? ["bases-view", "is-active"] : ["bases-view"],
+        id: `bases-0-view-${i}`,
+        role: "tabpanel",
+        ariaLabelledBy: [`bases-0-tab-${i}`],
+        tabIndex: 0,
+        dataViewIndex: String(i),
+        dataViewType: type,
+      })),
+    );
+  });
+
+  it("give a single view no tab panel role, id or label", () => {
+    const single = { views: [{ type: "table", name: "Table" }] };
+    const root = transformCodeblocks([{ dataQzBasesCodeblock: "0" }], {
+      slug: "note",
+      basesBlocks: [single],
+    });
+    expect(elements(root, (el) => el.properties?.role === "tab")).toEqual([]);
+    expect(elements(root, hasClass("bases-view")).map((p) => p.properties)).toEqual([
+      {
+        className: ["bases-view", "is-active"],
+        dataViewIndex: "0",
+        dataViewType: "table",
+      },
+    ]);
+
+    const html = render(
+      BasesBody()({
+        fileData: { slug: "b.base", basesData: single },
+        allFiles,
+        cfg: { locale: "en-US" },
+        ctx: { allSlugs: [] },
+      } as never) as never,
+    );
+    const { tabs, panels } = tabsOf(html);
+    expect(tabs).toEqual([]);
+    expect(panels).toEqual([{ id: undefined, role: undefined, labelledby: undefined }]);
+  });
+
+  it("prefix the ids of a codeblock transcluded from another note with bases-embed-", () => {
+    const other = {
+      slug: "other",
+      frontmatter: { title: "Other" },
+      filePath: "other.md",
+      basesBlocks: [basesData],
+    };
+    const root = transformCodeblocks(
+      [{ dataQzBasesCodeblock: "0", dataQzBasesSource: "other" }],
+      { slug: "note" },
+      [...allFiles, other] as unknown as QuartzPluginData[],
+    );
+    const ids = elements(root, (el) => typeof el.properties?.id === "string").map(
+      (el) => el.properties!.id,
+    );
+    expect(ids).toEqual([
+      "bases-embed-0-tab-0",
+      "bases-embed-0-tab-1",
+      "bases-embed-0-tab-2",
+      "bases-embed-0-view-0",
+      "bases-embed-0-view-1",
+      "bases-embed-0-view-2",
+    ]);
+  });
+
+  it("prefix the ids of a note's own codeblock (source is the note) with bases-", () => {
+    const root = transformCodeblocks([{ dataQzBasesCodeblock: "0", dataQzBasesSource: "note" }], {
+      slug: "note",
+      basesBlocks: [basesData],
+    });
+    const ids = elements(root, (el) => typeof el.properties?.id === "string").map(
+      (el) => el.properties!.id,
+    );
+    expect(ids.slice(0, 2)).toEqual(["bases-0-tab-0", "bases-0-tab-1"]);
   });
 });
 

@@ -159,6 +159,22 @@ describe("renderCellValue", () => {
     expect(result.props.disabled).toBe(true);
   });
 
+  it("names a checkbox after its property, without the note./file./formula. prefix", () => {
+    const label = (column?: string) =>
+      (renderCellValue(true, ctx, column) as { props: Record<string, unknown> }).props[
+        "aria-label"
+      ];
+    expect(label("note.done")).toBe("done");
+    expect(label("formula.isDone")).toBe("isDone");
+    expect(label("file.hasTag")).toBe("hasTag");
+    // an unprefixed note property (Bases' shorthand) is named as it is
+    expect(label("profile.public")).toBe("profile.public");
+    expect(label()).toBe("true");
+    expect(
+      (renderCellValue(false, ctx) as { props: Record<string, unknown> }).props["aria-label"],
+    ).toBe("false");
+  });
+
   it("renders numbers with bases-number class", () => {
     const result = renderCellValue(42, ctx) as { type: string; props: Record<string, unknown> };
     expect(result.props.class).toBe("bases-number");
